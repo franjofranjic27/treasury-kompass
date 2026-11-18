@@ -1,0 +1,565 @@
+openapi: 3.1.0
+info:
+  title: Treasury Kompass – agent-service
+  version: 0.1.0
+  summary: Chat-Agent, Ingest mit Extraktion und Fundstellen, Begründungsentwurf.
+  description: |
+    KI-Teil von Treasury Kompass (Python, FastAPI, LangChain, Anthropic, Voyage AI, pgvector).
+    Das LLM extrahiert, fragt nach, formuliert und erklärt. Es entscheidet weder Segment noch Profil,
+    Eignung oder Quoten; diese liest es beim treasury-service (`docs/api/treasury-service.openapi.yaml`).
+
+    Öffentlich unter `/agent/**` (über Gateway bzw. Dev-Proxy). Intern unter `/internal/**` nur
+    service-zu-service mit Header `X-Service-Key`; das Gateway routet `/internal/**` nicht.
+
+    Fehler: `application/problem+json` (RFC 9457), `type` = `urn:treasury-kompass:problem:<slug>`.
+    Nach Start eines SSE-Streams kommen Fehler als SSE-Event `error`.
+
+    ## SSE-Protokoll von `POST /agent/chat`
+
+    Antwort `text/event-stream`, UTF-8. Jedes Event hat `event: <name>`, `id: <laufende Nummer ab 1>` und
+    genau eine Zeile `data: <JSON>`. Alle 15 s ein Kommentar `: ping` als Keepalive. Header
+    `Cache-Control: no-cache` und `X-Accel-Buffering: no`.
+
+    | Event | Payload-Schema | Wann |
+    | --- | --- | --- |
+    | `meta` | `MetaEvent` | genau einmal, zuerst |
+    | `token` | `TokenEvent` | Textstück der Antwort, beliebig oft |
+    | `tool_call` | `ToolCallEvent` | Agent ruft ein Tool auf |
+    | `citation` | `CitationEvent` | je Treffer von `search_documents`, zwischen dessen `tool_call` und `tool_result` |
+    | `proposal` | `ProposalEvent` | je Ergebnis von `propose_answer`, zwischen dessen `tool_call` und `tool_result` |
+    | `tool_result` | `ToolResultEvent` | Tool fertig |
+    | `done` | `DoneEvent` | genau einmal am Ende bei Erfolg |
+    | `error` | `ErrorEvent` | genau einmal am Ende bei Fehler (statt `done`) |
+
+    Reihenfolge: `meta`, dann beliebig `token` und Tool-Blöcke (`tool_call` → `citation`*/`proposal`* →
+    `tool_result`), zuletzt `done` oder `error`. `EventSource` unterstützt kein POST; das SPA liest den
+    Stream per `fetch` und `ReadableStream`.
+
+    Beispiel:
+
+    ```text
+    event: meta
+    id: 1
+    data: {"conversationId":"c1a2…","turnId":"t9b8…","seq":1,"model":"claude-opus-5-5","createdAt":"2026-11-18T10:15:00Z"}
+
+    event: tool_call
+    id: 2
+    data: {"turnId":"t9b8…","toolCallId":"toolu_01","name":"search_documents","label":"Durchsuche Unterlagen","arguments":{"query":"Bilanzsumme"}}
+
+    event: citation
+    id: 3
+    data: {"turnId":"t9b8…","sourceId":"S1","documentId":"3f1e…","documentName":"Jahresrechnung_2025_Muster_Maschinenbau.pdf","page":4,"excerpt":"Total Aktiven 19 204","score":0.83}
+
+    event: tool_result
+    id: 4
+    data: {"turnId":"t9b8…","toolCallId":"toolu_01","name":"search_documents","status":"ok","summary":"3 Fundstellen","durationMs":412}
+
+    event: token
+    id: 5
+    data: {"turnId":"t9b8…","delta":"Die Bilanzsumme beträgt CHF 19.2 Mio. [S1]."}
+
+    event: done
+    id: 6
+    data: {"turnId":"t9b8…","conversationId":"c1a2…","finishReason":"end_turn","citationsUsed":["S1"],"proposalsCreated":0,"usage":{"inputTokens":5120,"outputTokens":96,"cacheReadInputTokens":4096}}
+    ```
+servers:
+  - url: http://localhost:8088
+    description: Gateway (Docker Compose)
+  - url: http://localhost:8000
+    description: agent-service direkt
+tags:
+  - name: Chat
+  - name: Conversations
+  - name: Rationale
+  - name: Internal
+    description: Nur für den treasury-service, Header `X-Service-Key` erforderlich.
+  - name: Health
+
+paths:
+  /agent/chat:
+    post:
+      tags: [Chat]
+      operationId: chat
+      summary: Eine Gesprächsrunde, Antwort als Server-Sent Events
+      description: |
+        Ohne `conversationId` entsteht ein neues Gespräch (Titel = erste Nachricht, gekürzt auf 80 Zeichen).
+        Vor dem Stream prüft der Agent, ob der Kunde existiert (`GET /api/clients/{clientId}` beim treasury-service).
+        Der Kontext (`context`) geht als Präfix in die Benutzernachricht dieses Turns, nicht in den Systemprompt.
+        Alle Tools arbeiten mit der `clientId` dieses Requests; das Modell kann sie nicht wählen (INV-6).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatRequest' }
+            example:
+              clientId: 00000000-0000-4000-8000-000000000001
+              conversationId: null
+              message: Wie hoch ist die Bilanzsumme laut Jahresrechnung?
+              context: { screen: QUESTIONNAIRE, questionKey: fin.totalAssets, currency: null }
+      responses:
+        '200':
+          description: SSE-Stream (siehe Protokoll in der API-Beschreibung)
+          headers:
+            Cache-Control:
+              schema: { type: string, example: no-cache }
+            X-Accel-Buffering:
+              schema: { type: string, example: 'no' }
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Folge von SSE-Events; Payloads siehe `x-sse-events`
+          x-sse-events:
+            meta: { $ref: '#/components/schemas/MetaEvent' }
+            token: { $ref: '#/components/schemas/TokenEvent' }
+            tool_call: { $ref: '#/components/schemas/ToolCallEvent' }
+            citation: { $ref: '#/components/schemas/CitationEvent' }
+            proposal: { $ref: '#/components/schemas/ProposalEvent' }
+            tool_result: { $ref: '#/components/schemas/ToolResultEvent' }
+            done: { $ref: '#/components/schemas/DoneEvent' }
+            error: { $ref: '#/components/schemas/ErrorEvent' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /agent/clients/{clientId}/conversations:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Conversations]
+      operationId: listConversations
+      summary: Gespräche eines Kunden, zuletzt aktive zuerst
+      responses:
+        '200':
+          description: Gespräche
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Conversation' }
+
+  /agent/conversations/{conversationId}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      tags: [Conversations]
+      operationId: getConversation
+      summary: Gespräch mit allen Turns (für das Chat-Panel)
+      responses:
+        '200':
+          description: Gespräch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Conversations]
+      operationId: deleteConversation
+      summary: 'Gespräch löschen (im Hackathon hart gelöscht)'
+      responses:
+        '204': { description: Gelöscht }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agent/clients/{clientId}/rationale-draft:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    post:
+      tags: [Rationale]
+      operationId: draftRationale
+      summary: Begründung für den Kunden aus dem aktuellen Assessment formulieren (KI-Entwurf)
+      description: |
+        Liest `GET /api/clients/{clientId}/assessment`, formuliert nur aus dessen Fakten und speichert nichts.
+        Der Berater speichert den (bearbeiteten) Text mit `PUT /api/clients/{clientId}/rationale` beim treasury-service.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RationaleDraftRequest' }
+      responses:
+        '200':
+          description: Entwurf
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RationaleDraft' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /internal/ingest:
+    post:
+      tags: [Internal]
+      operationId: startIngest
+      security: [ { serviceKey: [] } ]
+      summary: Ingest eines Dokuments starten (asynchron)
+      description: |
+        Idempotent pro `ingestId`. Läuft im Hintergrund: Inhalt holen (`GET /internal/documents/{id}/content`),
+        SHA-256 prüfen, Text pro Seite, Chunks und Embeddings ersetzen, Extraktion, Vorschläge posten.
+        Status-Callbacks `TEXT_EXTRACTED`, `INDEXED`, `EXTRACTED` oder `FAILED` an
+        `POST /internal/documents/{id}/status` des treasury-service, jeweils mit dieser `ingestId`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IngestRequest' }
+            example:
+              ingestId: 5b0f3c1e-9a1d-4c6e-8f2a-1d2e3f4a5b6c
+              documentId: 3f1e2d4c-5b6a-4789-8a0b-1c2d3e4f5a6b
+              clientId: 00000000-0000-4000-8000-000000000001
+              filename: Jahresrechnung_2025_Muster_Maschinenbau.pdf
+              sha256: 9f2c4b0e7a1d3c5b8e6f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b
+              sizeBytes: 482113
+              pageCount: 24
+      responses:
+        '202':
+          description: Angenommen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestAccepted' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /internal/documents/{documentId}:
+    parameters:
+      - name: documentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [Internal]
+      operationId: purgeDocument
+      security: [ { serviceKey: [] } ]
+      summary: Seiten und Chunks eines gelöschten Dokuments entfernen (idempotent)
+      responses:
+        '204': { description: Entfernt oder nicht vorhanden }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /health:
+    get:
+      tags: [Health]
+      operationId: health
+      summary: Liveness und Readiness (Datenbank) für Compose; nicht über das Gateway
+      responses:
+        '200':
+          description: Bereit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: Datenbank nicht erreichbar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+components:
+  securitySchemes:
+    serviceKey:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+      description: Gemeinsamer Service-Schlüssel (Env `INTERNAL_API_KEY`), Vergleich mit `hmac.compare_digest`.
+
+  parameters:
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    ValidationError:
+      description: Ungültige Eingabe (`validation-error`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Kunde oder Gespräch unbekannt (`not-found`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Assessment unvollständig (`assessment-incomplete`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: X-Service-Key fehlt oder ist falsch (`unauthorized`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unavailable:
+      description: treasury-service (`upstream-unavailable`) oder LLM (`llm-unavailable`) nicht erreichbar
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri, example: 'urn:treasury-kompass:problem:not-found' }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          enum: [validation-error, unauthorized, not-found, assessment-incomplete, upstream-unavailable, llm-unavailable, internal-error]
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    # ---------- Chat ----------
+    Screen:
+      type: string
+      enum: [START, QUESTIONNAIRE, DASHBOARD, ADVISORY]
+    ChatContext:
+      type: object
+      required: [screen]
+      additionalProperties: false
+      properties:
+        screen: { $ref: '#/components/schemas/Screen' }
+        questionKey:
+          type: [string, 'null']
+          description: Frage im Fokus (QuestionKey des treasury-service)
+          example: fin.totalAssets
+        currency:
+          type: [string, 'null']
+          enum: [EUR, USD, null]
+    ChatRequest:
+      type: object
+      required: [clientId, message, context]
+      additionalProperties: false
+      properties:
+        clientId: { type: string, format: uuid }
+        conversationId: { type: [string, 'null'], format: uuid, description: null = neues Gespräch }
+        message: { type: string, minLength: 1, maxLength: 4000 }
+        context: { $ref: '#/components/schemas/ChatContext' }
+    ToolName:
+      type: string
+      description: |
+        Lese-Tools: search_documents, get_client_overview, get_questionnaire, get_assessment, get_audit_trail,
+        get_rule_catalog, simulate_assessment (optional, speichert nichts). Einziges Schreib-Tool: propose_answer
+        (erzeugt nur Vorschläge, höchstens 5 pro Turn). Es gibt kein Tool zum Bestätigen oder Freigeben.
+      enum: [search_documents, get_client_overview, get_questionnaire, get_assessment, get_audit_trail, get_rule_catalog, simulate_assessment, propose_answer]
+    MetaEvent:
+      type: object
+      required: [conversationId, turnId, seq, model, createdAt]
+      properties:
+        conversationId: { type: string, format: uuid }
+        turnId: { type: string, format: uuid }
+        seq: { type: integer, minimum: 1, description: Nummer des Turns im Gespräch }
+        model: { type: string, example: claude-opus-5-5 }
+        createdAt: { type: string, format: date-time }
+    TokenEvent:
+      type: object
+      required: [turnId, delta]
+      properties:
+        turnId: { type: string, format: uuid }
+        delta: { type: string, description: 'Textstück; Fundstellen als Marker [S1], [S2]' }
+    ToolCallEvent:
+      type: object
+      required: [turnId, toolCallId, name, label, arguments]
+      properties:
+        turnId: { type: string, format: uuid }
+        toolCallId: { type: string, example: toolu_01 }
+        name: { $ref: '#/components/schemas/ToolName' }
+        label:
+          type: string
+          description: 'Anzeige im Chat-Panel: Durchsuche Unterlagen, Lese Kundendaten, Lese Fragebogen, Lese Beurteilung, Lese Audit-Trail, Lese Regelkatalog, Rechne Szenario, Erfasse Vorschlag'
+          example: Durchsuche Unterlagen
+        arguments:
+          type: object
+          additionalProperties: true
+          description: Tool-Argumente des Modells (ohne clientId), gekürzt auf 500 Zeichen je Wert
+    ToolResultEvent:
+      type: object
+      required: [turnId, toolCallId, name, status, summary, durationMs]
+      properties:
+        turnId: { type: string, format: uuid }
+        toolCallId: { type: string }
+        name: { $ref: '#/components/schemas/ToolName' }
+        status: { type: string, enum: [ok, error] }
+        summary: { type: string, example: 3 Fundstellen }
+        durationMs: { type: integer }
+    CitationEvent:
+      type: object
+      required: [turnId, sourceId, documentId, documentName, page, excerpt, score]
+      properties:
+        turnId: { type: string, format: uuid }
+        sourceId: { type: string, pattern: '^S[0-9]+$', description: 'pro Turn eindeutig, fortlaufend über alle Suchen', example: S1 }
+        documentId: { type: string, format: uuid }
+        documentName: { type: string }
+        page: { type: integer, minimum: 1 }
+        excerpt: { type: string, maxLength: 800, description: wörtlich aus dem Chunk }
+        score: { type: number, minimum: 0, maximum: 1, description: 1 − Kosinus-Distanz }
+    ProposalEvent:
+      type: object
+      required: [turnId, questionKey, questionLabel, value, outcome]
+      properties:
+        turnId: { type: string, format: uuid }
+        proposalId: { type: [string, 'null'], format: uuid }
+        questionKey: { type: string, example: goals.policyMaxHedgeRatio }
+        questionLabel: { type: string, example: Maximale Absicherungsquote }
+        value: { type: [number, string, boolean] }
+        valueLabel: { type: [string, 'null'], example: 90 % }
+        outcome:
+          type: string
+          description: Ergebnis beim treasury-service (ProposalOutcome)
+          enum: [APPLIED, OPEN, UNCHANGED, REJECTED]
+        reason:
+          type: [string, 'null']
+          enum: [NOT_EXTRACTABLE, INVALID_VALUE, UNKNOWN_KEY, NOT_APPLICABLE, LIMIT_REACHED, null]
+    DoneEvent:
+      type: object
+      required: [turnId, conversationId, finishReason, citationsUsed, proposalsCreated, usage]
+      properties:
+        turnId: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        finishReason:
+          type: string
+          description: end_turn normal; max_tokens Antwort abgeschnitten; refusal Modell lehnt ab (nach Fallback); limit_reached Modellaufruf-Limit erreicht
+          enum: [end_turn, max_tokens, refusal, limit_reached]
+        citationsUsed:
+          type: array
+          description: In der Antwort verwendete Marker (S-IDs), Reihenfolge des ersten Auftretens
+          items: { type: string, pattern: '^S[0-9]+$' }
+        proposalsCreated: { type: integer }
+        usage:
+          type: object
+          required: [inputTokens, outputTokens]
+          properties:
+            inputTokens: { type: integer }
+            outputTokens: { type: integer }
+            cacheReadInputTokens: { type: [integer, 'null'] }
+    ErrorEvent:
+      type: object
+      required: [code, message, retryable]
+      properties:
+        turnId: { type: [string, 'null'], format: uuid }
+        code:
+          type: string
+          enum: [llm-unavailable, llm-refusal, upstream-unavailable, timeout, internal-error]
+        message: { type: string, description: Deutsch, für die Anzeige }
+        retryable: { type: boolean }
+
+    # ---------- Gespräche ----------
+    Conversation:
+      type: object
+      required: [id, clientId, title, createdAt, updatedAt, turnCount]
+      properties:
+        id: { type: string, format: uuid }
+        clientId: { type: string, format: uuid }
+        title: { type: string, maxLength: 200 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        turnCount: { type: integer }
+    TurnCitation:
+      type: object
+      required: [sourceId, documentId, documentName, page, excerpt]
+      properties:
+        sourceId: { type: string, pattern: '^S[0-9]+$' }
+        documentId: { type: string, format: uuid }
+        documentName: { type: string }
+        page: { type: integer }
+        excerpt: { type: string }
+        used: { type: boolean, description: in der Antwort zitiert }
+    ToolEvent:
+      type: object
+      required: [toolCallId, name, label, status, summary]
+      properties:
+        toolCallId: { type: string }
+        name: { $ref: '#/components/schemas/ToolName' }
+        label: { type: string }
+        status: { type: string, enum: [ok, error] }
+        summary: { type: string }
+    Turn:
+      type: object
+      required: [id, seq, status, userMessage, citations, toolEvents, proposals, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        seq: { type: integer }
+        status: { type: string, enum: [COMPLETED, FAILED, CANCELLED] }
+        userMessage: { type: string }
+        assistantMessage: { type: [string, 'null'] }
+        context: { anyOf: [ { $ref: '#/components/schemas/ChatContext' }, { type: 'null' } ] }
+        citations:
+          type: array
+          items: { $ref: '#/components/schemas/TurnCitation' }
+        toolEvents:
+          type: array
+          items: { $ref: '#/components/schemas/ToolEvent' }
+        proposals:
+          type: array
+          items: { $ref: '#/components/schemas/ProposalEvent' }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+    ConversationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Conversation'
+        - type: object
+          required: [turns]
+          properties:
+            turns:
+              type: array
+              items: { $ref: '#/components/schemas/Turn' }
+
+    # ---------- Begründung ----------
+    RationaleDraftRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        audience:
+          type: string
+          enum: [CLIENT, ADVISOR]
+          default: CLIENT
+          description: CLIENT = für den CFO verständlich, ADVISOR = knapper mit Regel-IDs
+    RationaleDraft:
+      type: object
+      required: [clientId, assessmentVersion, text, model, generatedAt]
+      properties:
+        clientId: { type: string, format: uuid }
+        assessmentVersion: { type: integer, description: Version des Assessments, aus dem formuliert wurde }
+        text: { type: string, description: Absätze getrennt durch Leerzeile, ohne HTML }
+        model: { type: string, example: claude-opus-5-5 }
+        generatedAt: { type: string, format: date-time }
+
+    # ---------- Intern ----------
+    IngestRequest:
+      type: object
+      required: [ingestId, documentId, clientId, filename, sha256, sizeBytes]
+      additionalProperties: false
+      properties:
+        ingestId: { type: string, format: uuid }
+        documentId: { type: string, format: uuid }
+        clientId: { type: string, format: uuid }
+        filename: { type: string, maxLength: 255 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sizeBytes: { type: integer, format: int64 }
+        pageCount: { type: [integer, 'null'] }
+    IngestAccepted:
+      type: object
+      required: [ingestId, status]
+      properties:
+        ingestId: { type: string, format: uuid }
+        status:
+          type: string
+          description: ALREADY_RUNNING bzw. ALREADY_DONE bei wiederholtem Aufruf mit derselben ingestId
+          enum: [ACCEPTED, ALREADY_RUNNING, ALREADY_DONE]
+    Health:
+      type: object
+      required: [status, database]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        database: { type: string, enum: [ok, error] }
+        version: { type: string, example: 0.1.0 }

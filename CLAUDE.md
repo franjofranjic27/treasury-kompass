@@ -17,6 +17,7 @@ Hackathon-Projekt: FIDLEG-konforme Anlegerprofilierung und Absicherungs- bzw. An
 - LLM nur für Extraktion, Rückfragen und Begründungstexte. Segment, Risikoprofil, Eignung und Quoten berechnet ein deterministisches Regelwerk, jede Entscheidung mit Rechtsgrundlage im Audit-Trail.
 - Absicherungsquote nie über der Treasury-Policy und nie über 100 % der Nettoposition (sonst Spekulation).
 - Freigabe nur, wenn vorbefüllte Antworten bestätigt und die Checkliste erledigt ist; jede spätere Änderung hebt sie auf.
+- Stack: `treasury-service` (Kotlin, Spring Boot 4.1, Regelwerk als reines Subprojekt `rules`), `agent-service` (Python, FastAPI, LangChain, Anthropic `claude-opus-5-5`, Voyage `voyage-4`, pgvector), Angular 21 mit `@rch-adl/core`, ein Postgres 17 mit Schemas `treasury` und `rag`, Docker Compose. Architektur und Entscheide: `docs/architecture.md`, Use Cases: `docs/specs/use-cases.md`, Verträge: `docs/api/`.
 
 ## Daten
 

@@ -1,0 +1,1833 @@
+openapi: 3.1.0
+info:
+  title: Treasury Kompass – treasury-service
+  version: 0.1.0
+  summary: Kunden, Unterlagen, FIDLEG-Fragebogen, Regelwerk, Vorschläge, Freigabe und Audit-Trail.
+  description: |
+    Fachlicher Kern von Treasury Kompass. Alle Entscheidungen zu Segment, Risikoprofil, Eignung,
+    Absicherungsquoten und Liquiditätsaufteilung berechnet das deterministische Regelwerk
+    (siehe `docs/regelwerk.md`, `docs/architecture.md`). Beträge in Mio. (CHF bzw. Fremdwährung),
+    Quoten in Prozent (0–100), Anteile (`*Pct*`, `collarShare`) als Dezimalzahl (0.58 = 58 %).
+    Werte sind ungerundet; gerundet wird in der Anzeige (`de-CH`).
+
+    Öffentliche Endpunkte unter `/api/**` (über Gateway bzw. Dev-Proxy, gemockte Berateridentität).
+    Interne Endpunkte unter `/internal/**` nur service-zu-service mit Header `X-Service-Key`;
+    sie werden vom Gateway nicht geroutet. Der agent-service liest zusätzlich die öffentlichen
+    GET-Endpunkte direkt (ohne Gateway).
+
+    Fehler: `application/problem+json` (RFC 9457), `type` = `urn:treasury-kompass:problem:<slug>`.
+servers:
+  - url: http://localhost:8088
+    description: Gateway (Docker Compose)
+  - url: http://localhost:8080
+    description: treasury-service direkt
+tags:
+  - name: Meta
+  - name: Clients
+  - name: Documents
+  - name: Questionnaire
+  - name: Assessment
+  - name: Advisory
+  - name: Audit
+  - name: Internal
+    description: Nur für den agent-service, Header `X-Service-Key` erforderlich.
+
+paths:
+  /api/me:
+    get:
+      tags: [Meta]
+      operationId: getCurrentAdvisor
+      summary: Gemockte Berateridentität
+      responses:
+        '200':
+          description: Aktueller Berater
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Advisor' }
+
+  /api/rules:
+    get:
+      tags: [Meta]
+      operationId: listRules
+      summary: Regelkatalog mit Regel-ID und Rechtsgrundlage
+      responses:
+        '200':
+          description: Regeln
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RuleInfo' }
+
+  /api/market-data:
+    get:
+      tags: [Meta]
+      operationId: getMarketData
+      summary: Kassakurse und Zinssätze (Demo-Annahmen)
+      responses:
+        '200':
+          description: Marktdaten
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketData' }
+
+  /api/clients:
+    get:
+      tags: [Clients]
+      operationId: listClients
+      summary: Kunden auflisten (Start-Screen)
+      parameters:
+        - name: query
+          in: query
+          required: false
+          description: Teil des Namens, ohne Gross-/Kleinschreibung
+          schema: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Kunden, alphabetisch
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ClientSummary' }
+    post:
+      tags: [Clients]
+      operationId: createClient
+      summary: Kunden anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClientCreate' }
+            example: { name: Neu AG, industry: Präzisionsmechanik, employeeCount: 55, fiscalYear: 2025, shortLabel: KMU }
+      responses:
+        '201':
+          description: Angelegt
+          headers:
+            Location:
+              schema: { type: string }
+              description: /api/clients/{clientId}
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/clients/{clientId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Clients]
+      operationId: getClient
+      summary: Kunde mit Kennzahlen (Dashboard, linke Spalte)
+      responses:
+        '200':
+          description: Kunde
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClientDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Clients]
+      operationId: updateClient
+      summary: Stammdaten ändern (hebt eine aktive Freigabe auf)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClientUpdate' }
+      responses:
+        '200':
+          description: Geändert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/clients/{clientId}/documents:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Documents]
+      operationId: listDocuments
+      summary: Unterlagen des Kunden, neueste zuerst (Polling während Ingest)
+      responses:
+        '200':
+          description: Dokumente
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Document' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Documents]
+      operationId: uploadDocument
+      summary: PDF hochladen und Ingest starten
+      description: |
+        Prüft Signatur `%PDF-` in den ersten 1024 Bytes, Grösse ≤ 20 MB, ≤ 150 Seiten, keine Verschlüsselung,
+        kein Duplikat (SHA-256 pro Kunde). Speichert Bytes und Metadaten, Status `UPLOADED`, hebt eine aktive
+        Freigabe auf und startet nach Commit asynchron den Ingest im agent-service.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF-Datei
+            encoding:
+              file:
+                contentType: application/pdf
+      responses:
+        '201':
+          description: Hochgeladen
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/clients/{clientId}/documents/{documentId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      tags: [Documents]
+      operationId: getDocument
+      responses:
+        '200':
+          description: Dokument
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Documents]
+      operationId: deleteDocument
+      summary: Dokument löschen (Bytes, Metadaten, Index im agent-service); hebt Freigabe auf
+      responses:
+        '204': { description: Gelöscht }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/documents/{documentId}/content:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      tags: [Documents]
+      operationId: getDocumentContent
+      summary: PDF anzeigen (Fundstelle per `#page=n` im Viewer)
+      responses:
+        '200':
+          description: 'PDF-Bytes (Content-Disposition inline, X-Content-Type-Options nosniff)'
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/documents/{documentId}/reprocess:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/DocumentId'
+    post:
+      tags: [Documents]
+      operationId: reprocessDocument
+      summary: Erneut auslesen (neue ingestId, Status UPLOADED)
+      responses:
+        '202':
+          description: Ingest neu gestartet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/questionnaire:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Questionnaire]
+      operationId: getQuestionnaire
+      summary: Fragebogen mit Katalog, Antworten, Fundstellen und offenen Vorschlägen
+      responses:
+        '200':
+          description: Fragebogen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Questionnaire' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/questionnaire/sections/{sectionId}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - name: sectionId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/SectionId' }
+    post:
+      tags: [Questionnaire]
+      operationId: confirmSection
+      summary: Alle Antworten eines Abschnitts mit Status PROPOSED bestätigen
+      description: Keine Wertänderung, deshalb keine neue Assessment-Version und keine Aufhebung der Freigabe.
+      responses:
+        '200':
+          description: Bestätigt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SectionConfirmResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/answers/{questionKey}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/QuestionKeyPath'
+    put:
+      tags: [Questionnaire]
+      operationId: setAnswer
+      summary: Antwort setzen oder ändern (Status CONFIRMED, Quelle ADVISOR)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnswerUpdate' }
+            examples:
+              amount: { value: { value: 21.0 } }
+              choice: { value: { value: BUDGET_CERTAINTY } }
+              boolean: { value: { value: true } }
+      responses:
+        '200':
+          description: Gespeichert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Answer' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/clients/{clientId}/answers/{questionKey}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/QuestionKeyPath'
+    post:
+      tags: [Questionnaire]
+      operationId: confirmAnswer
+      summary: Vorbefüllte Antwort bestätigen (idempotent)
+      responses:
+        '200':
+          description: Bestätigt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Answer' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/answer-proposals:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Questionnaire]
+      operationId: listAnswerProposals
+      summary: Antwortvorschläge (Standard nur OPEN)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ProposalStatus' }
+      responses:
+        '200':
+          description: Vorschläge, neueste zuerst
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AnswerProposal' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/answer-proposals/{proposalId}/accept:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/ProposalId'
+    post:
+      tags: [Questionnaire]
+      operationId: acceptAnswerProposal
+      summary: Offenen Vorschlag übernehmen (Antwort CONFIRMED, hebt Freigabe auf)
+      responses:
+        '200':
+          description: Übernommen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Answer' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/clients/{clientId}/answer-proposals/{proposalId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/ProposalId'
+    post:
+      tags: [Questionnaire]
+      operationId: rejectAnswerProposal
+      summary: Offenen Vorschlag verwerfen
+      responses:
+        '200':
+          description: Verworfen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnswerProposal' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/clients/{clientId}/assessment:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Assessment]
+      operationId: getAssessment
+      summary: Ergebnis des Regelwerks (Dashboard und Beratung) inkl. Checkliste und Freigabestatus
+      responses:
+        '200':
+          description: Assessment der aktuellen Version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assessment' }
+              examples:
+                muster:
+                  summary: Muster Maschinenbau AG im Seed-Zustand (gekürzt)
+                  value:
+                    clientId: 00000000-0000-4000-8000-000000000001
+                    version: 1
+                    computedAt: '2026-11-18T09:03:00Z'
+                    status: COMPLETE
+                    missingInputs: []
+                    marketData:
+                      source: DEMO
+                      asOf: '2026-11-18'
+                      spotRates: { EUR: 0.94, USD: 0.8 }
+                      interestRates: { CHF: 0.0, EUR: 0.02, USD: 0.0375 }
+                    segment:
+                      result: RETAIL
+                      label: Privatkunde
+                      largeCompany: false
+                      thresholdsExceeded: 1
+                      thresholds:
+                        - { metric: TOTAL_ASSETS, label: Bilanzsumme, value: 19.2, limit: 20, exceeded: false }
+                        - { metric: REVENUE, label: Umsatzerlös, value: 28.4, limit: 40, exceeded: false }
+                        - { metric: EQUITY, label: Eigenkapital, value: 7.9, limit: 2, exceeded: true }
+                      professionalTreasury: false
+                      professionalBase: false
+                      optingIn: false
+                      reason: 1 von 3 Schwellenwerten überschritten, keine professionelle Tresorerie
+                      legalBasis: Art. 4 und 5 FIDLEG
+                      decisionSteps: []
+                      consequences: []
+                    exposures: null
+                    riskProfile:
+                      capacity:
+                        score: 3
+                        average: 2.5
+                        factors:
+                          - { factor: EQUITY_RATIO, label: Eigenkapitalquote, value: 0.4115, displayValue: 41 %, score: 4 }
+                          - { factor: EXCESS_LIQUIDITY_MONTHS, label: Überschussliquidität, value: 1.4253, displayValue: 1.4 Monate Betriebsaufwand, score: 2 }
+                          - { factor: EBIT_MARGIN, label: EBIT-Marge, value: 0.081, displayValue: 8.1 %, score: 3 }
+                          - { factor: UNHEDGED_FX_RISK, label: Ungesichertes Währungsrisiko, value: 0.6882, displayValue: 69 % des EBIT bei 10 % Kursbewegung, score: 1 }
+                      willingness:
+                        score: 2
+                        average: 2.0
+                        factors:
+                          - { factor: HEDGE_OBJECTIVE, label: Ziel der Absicherung, answer: BUDGET_CERTAINTY, answerLabel: 'Budgetsicherheit: Plankurs halten', score: 1 }
+                          - { factor: TOLERABLE_DRAWDOWN, label: Tragbarer Wertrückgang, answer: UP_TO_2_PERCENT, answerLabel: Bis 2 %, score: 2 }
+                          - { factor: FORGONE_GAIN, label: Entgangener Kursgewinn, answer: TOLERABLE, answerLabel: 'Ärgerlich, aber tragbar', score: 3 }
+                      score: 2
+                      code: CONSERVATIVE
+                      label: Konservativ
+                      legalBasis: Art. 12 FIDLEG
+                      note: null
+                    suitability: null
+                    hedges: null
+                    liquidity: null
+                    recommendedProducts: [FX_FORWARD, DEPOSIT, MONEY_MARKET_FUND, SHORT_TERM_BOND]
+                    checklist:
+                      - { id: info, text: 'Informationen zu Finanzdienstleister, Dienstleistung, Risiken und Kosten abgegeben', shortText: Informationen abgeben, legalBasis: Art. 8 FIDLEG, done: false, changedAt: null }
+                    reasons: []
+                    approval:
+                      status: NOT_APPROVED
+                      canApprove: false
+                      blockers:
+                        - { type: UNCONFIRMED_ANSWER, key: fin.totalAssets, text: 'Bestätigen: Bilanzsumme' }
+                        - { type: OPEN_CHECKLIST_ITEM, key: info, text: Informationen abgeben }
+                      approvalId: null
+                      approvedAt: null
+                      approvedBy: null
+                      assessmentVersion: null
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/hedge-settings/{currency}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/CurrencyPath'
+    put:
+      tags: [Advisory]
+      operationId: setHedgeSetting
+      summary: Startquote, Abstufung und Collar setzen (null = Regelstandard); hebt Freigabe auf
+      description: |
+        `startRatio` > `cap` wird gespeichert, wirksam ist `cap` (`limitedByPolicy`). Werte über 100 sind
+        ungültig (INV-2). Collar einschalten, obwohl nicht erlaubt (R-HED-06): 409 `collar-not-allowed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HedgeSettingUpdate' }
+            example: { startRatio: 70, stepDown: 10, collarEnabled: null }
+      responses:
+        '200':
+          description: Gespeichert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HedgeSetting' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/clients/{clientId}/checklist/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+      - name: itemId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ChecklistItemId' }
+    put:
+      tags: [Advisory]
+      operationId: setChecklistItem
+      summary: Checklistenpunkt erledigen oder wieder öffnen; hebt Freigabe auf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChecklistUpdate' }
+      responses:
+        '200':
+          description: Gespeichert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChecklistItem' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/rationale:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Advisory]
+      operationId: getRationale
+      summary: Gespeicherte Begründung (leer, wenn keine)
+      responses:
+        '200':
+          description: Begründung
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Rationale' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Advisory]
+      operationId: saveRationale
+      summary: Begründung speichern (gebunden an Assessment-Version); hebt Freigabe auf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RationaleUpdate' }
+      responses:
+        '200':
+          description: Gespeichert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Rationale' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/clients/{clientId}/approval:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    post:
+      tags: [Advisory]
+      operationId: approve
+      summary: Vorschlag und Beratungsprotokoll freigeben
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApprovalRequest' }
+      responses:
+        '201':
+          description: Freigegeben
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Approval' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Blocker (`approval-blocked`) oder veraltete Version (`stale-assessment`)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: urn:treasury-kompass:problem:approval-blocked
+                title: Freigabe nicht möglich
+                status: 409
+                detail: Vor der Freigabe 11 vorbefüllte Antworten bestätigen und 6 Punkte der Checkliste erledigen.
+                code: approval-blocked
+                blockers:
+                  - { type: UNCONFIRMED_ANSWER, key: goals.minimumLiquidity, text: 'Bestätigen: Mindestliquidität' }
+                  - { type: OPEN_CHECKLIST_ITEM, key: kid.FX_FORWARD, text: Basisinformationsblatt Devisentermingeschäft aushändigen }
+    delete:
+      tags: [Advisory]
+      operationId: withdrawApproval
+      summary: Freigabe zurückziehen (WITHDRAWN)
+      responses:
+        '204': { description: Zurückgezogen }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/clients/{clientId}/approvals:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Advisory]
+      operationId: listApprovals
+      summary: Freigaben inkl. aufgehobener, neueste zuerst, mit eingefrorenem Protokoll
+      responses:
+        '200':
+          description: Freigaben
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Approval' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/protocol:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Advisory]
+      operationId: getProtocol
+      summary: Beratungsprotokoll (Art. 15 FIDLEG); Entwurf live, freigegeben eingefroren
+      responses:
+        '200':
+          description: Protokoll
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Protocol' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/clients/{clientId}/audit-events:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    get:
+      tags: [Audit]
+      operationId: listAuditEvents
+      summary: Audit-Trail, neueste zuerst
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: before
+          in: query
+          required: false
+          description: Nur Events mit kleinerer ID (Blättern)
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Seite des Audit-Trails
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /internal/documents/{documentId}/content:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      tags: [Internal]
+      operationId: internalGetDocumentContent
+      security: [ { serviceKey: [] } ]
+      summary: PDF-Bytes für den Ingest
+      responses:
+        '200':
+          description: PDF
+          headers:
+            X-Client-Id:
+              schema: { type: string, format: uuid }
+            X-Document-Sha256:
+              schema: { type: string }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /internal/documents/{documentId}/status:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    post:
+      tags: [Internal]
+      operationId: internalUpdateDocumentStatus
+      security: [ { serviceKey: [] } ]
+      summary: Status-Callback des Ingest
+      description: |
+        Erlaubt: `UPLOADED` → `TEXT_EXTRACTED` → `INDEXED` → `EXTRACTED`; jeder Status → `FAILED`.
+        `ingestId` muss die aktuelle des Dokuments sein, sonst 409 `stale-ingest`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentStatusUpdate' }
+            examples:
+              indexed: { value: { ingestId: 5b0f3c1e-9a1d-4c6e-8f2a-1d2e3f4a5b6c, status: INDEXED, chunkCount: 58 } }
+              failed: { value: { ingestId: 5b0f3c1e-9a1d-4c6e-8f2a-1d2e3f4a5b6c, status: FAILED, errorCode: NO_TEXT_LAYER, errorMessage: 'Kein Textlayer gefunden (Scan?)' } }
+      responses:
+        '204': { description: Übernommen }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /internal/clients/{clientId}/answer-proposals:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    post:
+      tags: [Internal]
+      operationId: internalCreateAnswerProposals
+      security: [ { serviceKey: [] } ]
+      summary: Antwortvorschläge aus Extraktion (DOCUMENT) oder Chat (AGENT)
+      description: |
+        Jeder Vorschlag wird einzeln nach den Antwortregeln verarbeitet (docs/architecture.md, Abschnitt 6).
+        Teilweise Annahme ist normal; ein Fehler bei einem Eintrag lehnt nicht den ganzen Request ab.
+        Kein Vorschlag kann eine Antwort bestätigen (INV-5).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposalBatch' }
+            example:
+              source: DOCUMENT
+              documentId: 3f1e2d4c-5b6a-4789-8a0b-1c2d3e4f5a6b
+              ingestId: 5b0f3c1e-9a1d-4c6e-8f2a-1d2e3f4a5b6c
+              conversationId: null
+              proposals:
+                - questionKey: fin.totalAssets
+                  value: 19.2
+                  confidence: HIGH
+                  rationale: Total Aktiven gemäss Bilanz per 31.12.2025, in CHF Mio. umgerechnet aus TCHF 19 204.
+                  citation: { documentId: 3f1e2d4c-5b6a-4789-8a0b-1c2d3e4f5a6b, page: 4, locationLabel: 'Bilanz, S. 4', excerpt: Total Aktiven 19 204, verified: true }
+                - questionKey: knowledge.fxForward
+                  value: EXPERIENCE
+                  confidence: MEDIUM
+                  rationale: Offene Devisentermingeschäfte über EUR 2.0 Mio. per 31.12.2025.
+                  citation: { documentId: 3f1e2d4c-5b6a-4789-8a0b-1c2d3e4f5a6b, page: 12, locationLabel: Anhang Ziff. 7, excerpt: Devisentermingeschäfte EUR 2.0 Mio., verified: true }
+      responses:
+        '200':
+          description: Ergebnis je Vorschlag
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalBatchResult' }
+              example:
+                results:
+                  - { questionKey: fin.totalAssets, proposalId: 7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d, outcome: APPLIED, reason: null }
+                  - { questionKey: knowledge.fxForward, proposalId: 8b9c0d1e-2f3a-4b4c-9d5e-6f7a8b9c0d1e, outcome: OPEN, reason: null }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /internal/clients/{clientId}/assessment/simulate:
+    parameters:
+      - $ref: '#/components/parameters/ClientId'
+    post:
+      tags: [Internal]
+      operationId: internalSimulateAssessment
+      security: [ { serviceKey: [] } ]
+      summary: Was-wäre-wenn ohne Speichern (für Chat-Tool simulate_assessment, optional)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimulationRequest' }
+            example: { overrides: { fin.totalAssets: 21.0 } }
+      responses:
+        '200':
+          description: Assessment mit `version` der Basis; nichts gespeichert, kein Audit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assessment' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    serviceKey:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+      description: Gemeinsamer Service-Schlüssel (Env `INTERNAL_API_KEY`), Vergleich in konstanter Zeit.
+
+  parameters:
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ProposalId:
+      name: proposalId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    QuestionKeyPath:
+      name: questionKey
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/QuestionKey' }
+    CurrencyPath:
+      name: currency
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Currency' }
+
+  responses:
+    Problem:
+      description: Fehler (siehe `type`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: Ungültige Eingabe (`validation-error`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: urn:treasury-kompass:problem:validation-error
+            title: Ungültige Eingabe
+            status: 400
+            detail: Die Absicherungsquote muss zwischen 0 und 100 % liegen.
+            code: validation-error
+            errors:
+              - { field: value, message: muss zwischen 0 und 100 liegen }
+    NotFound:
+      description: Nicht gefunden (`not-found`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: urn:treasury-kompass:problem:not-found
+            title: Nicht gefunden
+            status: 404
+            detail: Kunde 00000000-0000-4000-8000-000000000099 existiert nicht.
+            code: not-found
+    Conflict:
+      description: Zustandskonflikt (z.B. `duplicate-client`, `question-not-applicable`, `stale-assessment`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: X-Service-Key fehlt oder ist falsch (`unauthorized`)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    # ---------- Allgemein ----------
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details mit Erweiterungen
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri, example: 'urn:treasury-kompass:problem:validation-error' }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { $ref: '#/components/schemas/ProblemCode' }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+        blockers:
+          type: array
+          items: { $ref: '#/components/schemas/Blocker' }
+    ProblemCode:
+      type: string
+      enum:
+        - validation-error
+        - unauthorized
+        - not-found
+        - duplicate-client
+        - duplicate-document
+        - question-not-applicable
+        - proposal-not-open
+        - collar-not-allowed
+        - stale-assessment
+        - assessment-incomplete
+        - approval-blocked
+        - no-active-approval
+        - stale-ingest
+        - invalid-status-transition
+        - payload-too-large
+        - unsupported-media-type
+        - pdf-page-limit
+        - pdf-encrypted
+        - pdf-unreadable
+        - upstream-unavailable
+        - llm-unavailable
+        - internal-error
+    Currency:
+      type: string
+      enum: [EUR, USD]
+    Advisor:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, example: advisor-demo }
+        name: { type: string, example: Kundenberater Firmenkunden }
+    RuleInfo:
+      type: object
+      required: [id, title, description, regelwerkSection]
+      properties:
+        id: { type: string, pattern: '^R-[A-Z]{3}-[0-9]{2}$', example: R-SEG-01 }
+        title: { type: string, example: Kundensegment }
+        description: { type: string }
+        regelwerkSection: { type: string, example: '1' }
+        legalBasis: { type: [string, 'null'], example: Art. 4 und 5 FIDLEG }
+    MarketData:
+      type: object
+      required: [source, asOf, spotRates, interestRates]
+      properties:
+        source: { type: string, enum: [DEMO, SNB] }
+        asOf: { type: string, format: date }
+        spotRates:
+          type: object
+          description: CHF je Einheit Fremdwährung
+          required: [EUR, USD]
+          properties:
+            EUR: { type: number, example: 0.94 }
+            USD: { type: number, example: 0.8 }
+        interestRates:
+          type: object
+          description: Zinssatz p.a. als Dezimalzahl
+          required: [CHF, EUR, USD]
+          properties:
+            CHF: { type: number, example: 0.0 }
+            EUR: { type: number, example: 0.02 }
+            USD: { type: number, example: 0.0375 }
+
+    # ---------- Kunden ----------
+    ClientCreate:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        industry: { type: [string, 'null'], maxLength: 200 }
+        employeeCount: { type: [integer, 'null'], minimum: 0 }
+        fiscalYear: { type: [integer, 'null'], minimum: 2000, maximum: 2100 }
+        shortLabel: { type: [string, 'null'], maxLength: 60, example: Export-KMU }
+    ClientUpdate:
+      type: object
+      additionalProperties: false
+      description: Nur gesetzte Felder werden geändert (JSON Merge Patch Semantik)
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        industry: { type: [string, 'null'], maxLength: 200 }
+        employeeCount: { type: [integer, 'null'], minimum: 0 }
+        fiscalYear: { type: [integer, 'null'], minimum: 2000, maximum: 2100 }
+        shortLabel: { type: [string, 'null'], maxLength: 60 }
+    Client:
+      type: object
+      required: [id, name, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Muster Maschinenbau AG }
+        industry: { type: [string, 'null'], example: Maschinenbau }
+        employeeCount: { type: [integer, 'null'], example: 140 }
+        fiscalYear: { type: [integer, 'null'], example: 2025 }
+        shortLabel: { type: [string, 'null'], example: Export-KMU }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ClientSummary:
+      allOf:
+        - $ref: '#/components/schemas/Client'
+        - type: object
+          required: [documentCount, openItemCount, approvalStatus]
+          properties:
+            segment: { anyOf: [ { $ref: '#/components/schemas/ClientSegment' }, { type: 'null' } ] }
+            riskProfile: { anyOf: [ { $ref: '#/components/schemas/RiskProfileCode' }, { type: 'null' } ] }
+            documentCount: { type: integer }
+            openItemCount: { type: integer, description: Anzahl Blocker der Freigabe }
+            approvalStatus: { $ref: '#/components/schemas/ApprovalStatus' }
+    ClientDetail:
+      allOf:
+        - $ref: '#/components/schemas/ClientSummary'
+        - type: object
+          required: [keyFigures, assessmentVersion]
+          properties:
+            assessmentVersion: { type: integer }
+            keyFigures:
+              type: array
+              description: Antworten der Abschnitte FINANCIALS und FX_FLOWS in Katalogreihenfolge
+              items: { $ref: '#/components/schemas/KeyFigure' }
+    KeyFigure:
+      type: object
+      required: [key, label, unit]
+      properties:
+        key: { $ref: '#/components/schemas/QuestionKey' }
+        label: { type: string, example: Bilanzsumme }
+        unit: { type: string, example: CHF Mio. }
+        value: { type: [number, 'null'] }
+        status: { anyOf: [ { $ref: '#/components/schemas/AnswerStatus' }, { type: 'null' } ] }
+        source: { anyOf: [ { $ref: '#/components/schemas/AnswerSource' }, { type: 'null' } ] }
+        citation: { anyOf: [ { $ref: '#/components/schemas/Citation' }, { type: 'null' } ] }
+        confidence: { anyOf: [ { $ref: '#/components/schemas/Confidence' }, { type: 'null' } ] }
+
+    # ---------- Dokumente ----------
+    DocumentStatus:
+      type: string
+      enum: [UPLOADED, TEXT_EXTRACTED, INDEXED, EXTRACTED, FAILED]
+    DocumentErrorCode:
+      type: string
+      enum: [INGEST_UNAVAILABLE, CHECKSUM_MISMATCH, PDF_PARSE_ERROR, NO_TEXT_LAYER, EMBEDDING_FAILED, EXTRACTION_FAILED, LLM_REFUSAL, INTERNAL_ERROR]
+    Document:
+      type: object
+      required: [id, clientId, filename, contentType, sizeBytes, sha256, status, uploadedAt, uploadedBy, statusChangedAt]
+      properties:
+        id: { type: string, format: uuid }
+        clientId: { type: string, format: uuid }
+        filename: { type: string, example: Jahresrechnung_2025_Muster_Maschinenbau.pdf }
+        contentType: { type: string, example: application/pdf }
+        sizeBytes: { type: integer, format: int64 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        pageCount: { type: [integer, 'null'], example: 24 }
+        status: { $ref: '#/components/schemas/DocumentStatus' }
+        chunkCount: { type: [integer, 'null'], description: '> 0 heisst: im Chat durchsuchbar, auch bei FAILED' }
+        errorCode: { anyOf: [ { $ref: '#/components/schemas/DocumentErrorCode' }, { type: 'null' } ] }
+        errorMessage: { type: [string, 'null'] }
+        uploadedAt: { type: string, format: date-time }
+        uploadedBy: { type: string }
+        statusChangedAt: { type: string, format: date-time }
+
+    # ---------- Fragebogen ----------
+    QuestionKey:
+      type: string
+      enum:
+        - fin.revenue
+        - fin.totalAssets
+        - fin.equity
+        - fin.ebit
+        - fin.cash
+        - fin.operatingExpenses
+        - fin.floatingRateDebt
+        - fx.eur.inflow
+        - fx.eur.outflow
+        - fx.usd.inflow
+        - fx.usd.outflow
+        - segment.treasuryOrganisation
+        - segment.optingIn
+        - goals.hedgeObjective
+        - goals.policyMaxHedgeRatio
+        - goals.minimumLiquidity
+        - goals.investmentHorizon
+        - risk.tolerableDrawdown
+        - risk.forgoneGainAttitude
+        - knowledge.fxForward
+        - knowledge.zeroCostCollar
+        - knowledge.moneyMarketFund
+        - knowledge.shortTermBond
+    SectionId:
+      type: string
+      enum: [FINANCIALS, FX_FLOWS, SEGMENT, GOALS, RISK_TOLERANCE, KNOWLEDGE]
+    QuestionType:
+      type: string
+      description: |
+        AMOUNT = Zahl in Mio. (2 Nachkommastellen); PERCENT = ganze Zahl 0–100; CHOICE = Code aus `options`;
+        BOOLEAN = true/false; KNOWLEDGE_LEVEL = NONE, KNOWLEDGE, EXPERIENCE.
+      enum: [AMOUNT, PERCENT, CHOICE, BOOLEAN, KNOWLEDGE_LEVEL]
+    AnswerValue:
+      description: Typ gemäss `Question.type`
+      type: [number, string, boolean]
+    AnswerStatus:
+      type: string
+      enum: [PROPOSED, CONFIRMED]
+    AnswerSource:
+      type: string
+      enum: [DOCUMENT, RULE, AGENT, ADVISOR]
+    ProposalSource:
+      type: string
+      enum: [DOCUMENT, RULE, AGENT]
+    ProposalStatus:
+      type: string
+      enum: [OPEN, APPLIED, ACCEPTED, REJECTED, SUPERSEDED]
+    Confidence:
+      type: string
+      enum: [HIGH, MEDIUM, LOW]
+    TreasuryOrganisation:
+      type: string
+      enum: [TREASURY_DEPARTMENT, CFO_OR_ACCOUNTING, OUTSOURCED]
+    HedgeObjective:
+      type: string
+      enum: [BUDGET_CERTAINTY, PROTECT_MARGINS, LOW_HEDGING_COST]
+    InvestmentHorizon:
+      type: string
+      enum: [UNDER_1_YEAR, ONE_TO_THREE_YEARS, OVER_THREE_YEARS]
+    TolerableDrawdown:
+      type: string
+      enum: [NONE, UP_TO_2_PERCENT, UP_TO_5_PERCENT, OVER_5_PERCENT]
+    ForgoneGainAttitude:
+      type: string
+      enum: [ACCEPTABLE, TOLERABLE, NOT_ACCEPTABLE]
+    KnowledgeLevel:
+      type: string
+      enum: [NONE, KNOWLEDGE, EXPERIENCE]
+    Citation:
+      type: object
+      description: Fundstelle
+      required: [documentName, verified]
+      properties:
+        documentId: { type: [string, 'null'], format: uuid, description: null bei Demo-Daten ohne Dokument }
+        documentName: { type: string, example: Jahresrechnung_2025_Muster_Maschinenbau.pdf }
+        page: { type: [integer, 'null'], minimum: 1, example: 4 }
+        locationLabel: { type: [string, 'null'], example: 'Bilanz, S. 4' }
+        excerpt: { type: [string, 'null'], maxLength: 600 }
+        verified: { type: boolean, description: Excerpt auf der zitierten Seite gefunden }
+    Answer:
+      type: object
+      required: [questionKey, value, status, source, updatedAt]
+      properties:
+        questionKey: { $ref: '#/components/schemas/QuestionKey' }
+        value: { $ref: '#/components/schemas/AnswerValue' }
+        valueLabel: { type: [string, 'null'], description: Anzeigetext bei CHOICE/BOOLEAN/KNOWLEDGE_LEVEL }
+        status: { $ref: '#/components/schemas/AnswerStatus' }
+        source: { $ref: '#/components/schemas/AnswerSource' }
+        citation: { anyOf: [ { $ref: '#/components/schemas/Citation' }, { type: 'null' } ] }
+        confidence: { anyOf: [ { $ref: '#/components/schemas/Confidence' }, { type: 'null' } ] }
+        note: { type: [string, 'null'], description: 'z.B. «Vorschlag aus dem Betriebsaufwand (Erfolgsrechnung, S. 5)»' }
+        updatedAt: { type: string, format: date-time }
+        confirmedAt: { type: [string, 'null'], format: date-time }
+        confirmedBy: { type: [string, 'null'] }
+      example:
+        questionKey: fin.totalAssets
+        value: 19.2
+        valueLabel: null
+        status: PROPOSED
+        source: DOCUMENT
+        citation: { documentId: null, documentName: Jahresrechnung_2025_Muster_Maschinenbau.pdf, page: 4, locationLabel: 'Bilanz, S. 4', excerpt: null, verified: false }
+        confidence: HIGH
+        note: null
+        updatedAt: '2026-11-18T09:02:00Z'
+        confirmedAt: null
+        confirmedBy: null
+    AnswerProposal:
+      type: object
+      required: [id, questionKey, value, source, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        questionKey: { $ref: '#/components/schemas/QuestionKey' }
+        value: { $ref: '#/components/schemas/AnswerValue' }
+        valueLabel: { type: [string, 'null'] }
+        source: { $ref: '#/components/schemas/ProposalSource' }
+        status: { $ref: '#/components/schemas/ProposalStatus' }
+        citation: { anyOf: [ { $ref: '#/components/schemas/Citation' }, { type: 'null' } ] }
+        confidence: { anyOf: [ { $ref: '#/components/schemas/Confidence' }, { type: 'null' } ] }
+        rationale: { type: [string, 'null'], maxLength: 1000 }
+        conversationId: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        decidedBy: { type: [string, 'null'] }
+    QuestionOption:
+      type: object
+      required: [value, label]
+      properties:
+        value: { $ref: '#/components/schemas/AnswerValue' }
+        label: { type: string, example: 'Budgetsicherheit: Plankurs halten' }
+    Question:
+      type: object
+      required: [key, section, text, shortLabel, type, required, visible, extractable, options, openProposals]
+      properties:
+        key: { $ref: '#/components/schemas/QuestionKey' }
+        section: { $ref: '#/components/schemas/SectionId' }
+        text: { type: string, example: 'Welche maximale Absicherungsquote erlaubt die Treasury-Policy?' }
+        shortLabel: { type: string, example: Maximale Absicherungsquote }
+        hint: { type: [string, 'null'], example: 'Richtwert: 1.5 Monate Betriebsaufwand, CHF 3.3 Mio.' }
+        type: { $ref: '#/components/schemas/QuestionType' }
+        unit: { type: [string, 'null'], example: CHF Mio. }
+        min: { type: [number, 'null'] }
+        max: { type: [number, 'null'] }
+        options:
+          type: array
+          description: Auswahl bei CHOICE, BOOLEAN, KNOWLEDGE_LEVEL; Vorschlagswerte bei PERCENT; sonst leer
+          items: { $ref: '#/components/schemas/QuestionOption' }
+        required: { type: boolean }
+        visible: { type: boolean }
+        extractable: { type: boolean }
+        answer: { anyOf: [ { $ref: '#/components/schemas/Answer' }, { type: 'null' } ] }
+        openProposals:
+          type: array
+          items: { $ref: '#/components/schemas/AnswerProposal' }
+    QuestionnaireSection:
+      type: object
+      required: [id, title, legalBasis, questions]
+      properties:
+        id: { $ref: '#/components/schemas/SectionId' }
+        title: { type: string, example: Kundensegmentierung }
+        legalBasis: { type: string, example: Art. 4 und 5 FIDLEG }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/Question' }
+    Questionnaire:
+      type: object
+      required: [clientId, assessmentVersion, sections, progress]
+      properties:
+        clientId: { type: string, format: uuid }
+        assessmentVersion: { type: integer }
+        sections:
+          type: array
+          items: { $ref: '#/components/schemas/QuestionnaireSection' }
+        progress:
+          type: object
+          required: [total, visible, answered, confirmed, proposed, openProposals, missingRequired]
+          properties:
+            total: { type: integer }
+            visible: { type: integer }
+            answered: { type: integer }
+            confirmed: { type: integer }
+            proposed: { type: integer, description: Antworten mit Status PROPOSED }
+            openProposals: { type: integer }
+            missingRequired: { type: integer }
+    AnswerUpdate:
+      type: object
+      required: [value]
+      additionalProperties: false
+      properties:
+        value: { $ref: '#/components/schemas/AnswerValue' }
+    SectionConfirmResult:
+      type: object
+      required: [sectionId, confirmedKeys]
+      properties:
+        sectionId: { $ref: '#/components/schemas/SectionId' }
+        confirmedKeys:
+          type: array
+          items: { $ref: '#/components/schemas/QuestionKey' }
+
+    # ---------- Assessment ----------
+    AssessmentStatus:
+      type: string
+      enum: [COMPLETE, INCOMPLETE]
+    ClientSegment:
+      type: string
+      description: INSTITUTIONAL ist reserviert und wird für Firmenkunden nie berechnet.
+      enum: [RETAIL, PROFESSIONAL, INSTITUTIONAL]
+    RiskProfileCode:
+      type: string
+      description: 1 SAFETY (Sicherheit), 2 CONSERVATIVE (Konservativ), 3 BALANCED (Ausgewogen), 4 GROWTH (Wachstum), 5 DYNAMIC (Dynamisch)
+      enum: [SAFETY, CONSERVATIVE, BALANCED, GROWTH, DYNAMIC]
+    ProductCode:
+      type: string
+      enum: [FX_FORWARD, ZERO_COST_COLLAR, MONEY_MARKET_FUND, SHORT_TERM_BOND, DEPOSIT]
+    SuitabilityStatus:
+      type: string
+      enum: [SUITABLE, SUITABLE_AFTER_DISCLOSURE, NOT_SUITABLE, NOT_APPLICABLE]
+    RiskLevel:
+      type: string
+      enum: [LOW, MEDIUM, HIGH]
+    ExposureDirection:
+      type: string
+      enum: [NET_INFLOW, NET_OUTFLOW, NONE]
+    HedgeAction:
+      type: string
+      description: SELL_FORWARD = Fremdwährung auf Termin verkaufen (Nettozufluss), BUY_FORWARD = kaufen (Nettoabfluss)
+      enum: [SELL_FORWARD, BUY_FORWARD]
+    Assessment:
+      type: object
+      description: |
+        Ergebnis des Regelwerks für eine Version der Eingaben. Fehlen Pflichtangaben (`status` INCOMPLETE),
+        sind Blöcke `null`, deren Eingaben unvollständig sind. `checklist` und `approval` werden beim Lesen
+        aus dem Workflow-Zustand ergänzt und erzeugen keine neue Version.
+      required: [clientId, version, computedAt, status, missingInputs, marketData, recommendedProducts, checklist, reasons, approval]
+      properties:
+        clientId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        computedAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/AssessmentStatus' }
+        missingInputs:
+          type: array
+          items: { $ref: '#/components/schemas/QuestionKey' }
+        marketData: { $ref: '#/components/schemas/MarketData' }
+        segment: { anyOf: [ { $ref: '#/components/schemas/SegmentResult' }, { type: 'null' } ] }
+        exposures: { anyOf: [ { $ref: '#/components/schemas/Exposures' }, { type: 'null' } ] }
+        riskProfile: { anyOf: [ { $ref: '#/components/schemas/RiskProfile' }, { type: 'null' } ] }
+        suitability:
+          anyOf:
+            - type: array
+              items: { $ref: '#/components/schemas/Suitability' }
+            - type: 'null'
+        hedges: { anyOf: [ { $ref: '#/components/schemas/HedgeOverview' }, { type: 'null' } ] }
+        liquidity: { anyOf: [ { $ref: '#/components/schemas/LiquidityAllocation' }, { type: 'null' } ] }
+        recommendedProducts:
+          type: array
+          items: { $ref: '#/components/schemas/ProductCode' }
+        checklist:
+          type: array
+          items: { $ref: '#/components/schemas/ChecklistItem' }
+        reasons:
+          type: array
+          description: Begründungsabsätze aus Regeltexten (Prototyp `reasons()`), Markdown-frei
+          items: { type: string }
+        approval: { $ref: '#/components/schemas/ApprovalState' }
+    SegmentResult:
+      type: object
+      required: [result, label, largeCompany, thresholdsExceeded, thresholds, professionalTreasury, professionalBase, optingIn, reason, legalBasis, decisionSteps, consequences]
+      properties:
+        result: { $ref: '#/components/schemas/ClientSegment' }
+        label: { type: string, example: Privatkunde }
+        largeCompany: { type: boolean }
+        thresholdsExceeded: { type: integer, minimum: 0, maximum: 3 }
+        thresholds:
+          type: array
+          items:
+            type: object
+            required: [metric, label, value, limit, exceeded]
+            properties:
+              metric: { type: string, enum: [TOTAL_ASSETS, REVENUE, EQUITY] }
+              label: { type: string }
+              value: { type: number }
+              limit: { type: number }
+              exceeded: { type: boolean, description: value > limit (strikt) }
+        professionalTreasury: { type: boolean }
+        professionalBase: { type: boolean, description: grosses Unternehmen oder professionelle Tresorerie }
+        optingIn: { type: boolean, description: wirksames Opting-in (nur mit professioneller Basis) }
+        reason: { type: string }
+        legalBasis: { type: string }
+        decisionSteps:
+          type: array
+          items:
+            type: object
+            required: [question, answer, reason, legalBasis]
+            properties:
+              question: { type: string, example: 'Grosses Unternehmen?' }
+              answer: { type: string, example: Nein }
+              reason: { type: string, example: '1 von 3 Schwellenwerten überschritten, mindestens 2 nötig' }
+              legalBasis: { type: string, example: Art. 4 Abs. 5 FIDLEG }
+        consequences:
+          type: array
+          items:
+            type: object
+            required: [text, legalBasis]
+            properties:
+              text: { type: string }
+              legalBasis: { type: string }
+    Exposures:
+      type: object
+      required: [fx, fxSensitivityPctEbit, interest, liquidity, stress]
+      properties:
+        fx:
+          type: array
+          items: { $ref: '#/components/schemas/FxExposure' }
+        fxSensitivityPctEbit: { type: number, description: Σ Sensitivitäten / EBIT (1 bei EBIT ≤ 0) }
+        interest:
+          type: object
+          required: [floatingRateDebt, sensitivityChf, sensitivityPctEbit, riskLevel]
+          properties:
+            floatingRateDebt: { type: number }
+            sensitivityChf: { type: number, description: Zinsaufwand bei +1 Prozentpunkt pro Jahr }
+            sensitivityPctEbit: { type: number }
+            riskLevel: { $ref: '#/components/schemas/RiskLevel' }
+        liquidity:
+          type: object
+          required: [cash, minimumLiquidity, suggestedMinimumLiquidity, monthlyOperatingExpenses, excessLiquidity]
+          properties:
+            cash: { type: number }
+            minimumLiquidity: { type: number }
+            suggestedMinimumLiquidity: { type: number, description: round1(Betriebsaufwand / 12 × 1.5) }
+            monthlyOperatingExpenses: { type: number }
+            excessLiquidity: { type: number }
+        stress:
+          type: array
+          items:
+            type: object
+            required: [label, effect, ebitImpactChf, ebitImpactPct]
+            properties:
+              label: { type: string, example: EUR −10 % }
+              effect: { type: string, example: Zuflüsse verlieren an Wert }
+              ebitImpactChf: { type: number, description: Belastung als positive Zahl }
+              ebitImpactPct: { type: number }
+    FxExposure:
+      type: object
+      required: [currency, inflow, outflow, netPosition, spotRate, netPositionChf, sensitivityChf, sensitivityPctEbit, direction, riskLevel]
+      properties:
+        currency: { $ref: '#/components/schemas/Currency' }
+        inflow: { type: number }
+        outflow: { type: number }
+        netPosition: { type: number, description: 'round2(inflow − outflow), Fremdwährung' }
+        spotRate: { type: number }
+        netPositionChf: { type: number }
+        sensitivityChf: { type: number, description: '|netPositionChf| × 10 %' }
+        sensitivityPctEbit: { type: number }
+        direction: { $ref: '#/components/schemas/ExposureDirection' }
+        riskLevel: { $ref: '#/components/schemas/RiskLevel' }
+      example: { currency: EUR, inflow: 18.7, outflow: 4.5, netPosition: 14.2, spotRate: 0.94, netPositionChf: 13.348, sensitivityChf: 1.3348, sensitivityPctEbit: 0.580348, direction: NET_INFLOW, riskLevel: HIGH }
+    RiskProfile:
+      type: object
+      required: [capacity, willingness, score, code, label, legalBasis]
+      properties:
+        capacity:
+          type: object
+          required: [score, average, factors]
+          properties:
+            score: { type: integer, minimum: 1, maximum: 5, description: half-up gerundeter Durchschnitt }
+            average: { type: number }
+            factors:
+              type: array
+              items:
+                type: object
+                required: [factor, label, value, displayValue, score]
+                properties:
+                  factor: { type: string, enum: [EQUITY_RATIO, EXCESS_LIQUIDITY_MONTHS, EBIT_MARGIN, UNHEDGED_FX_RISK] }
+                  label: { type: string }
+                  value: { type: number }
+                  displayValue: { type: string }
+                  score: { type: integer, minimum: 1, maximum: 5 }
+        willingness:
+          type: object
+          required: [score, average, factors]
+          properties:
+            score: { type: integer, minimum: 1, maximum: 5 }
+            average: { type: number }
+            factors:
+              type: array
+              items:
+                type: object
+                required: [factor, label, answer, answerLabel, score]
+                properties:
+                  factor: { type: string, enum: [HEDGE_OBJECTIVE, TOLERABLE_DRAWDOWN, FORGONE_GAIN] }
+                  label: { type: string }
+                  answer: { type: string }
+                  answerLabel: { type: string }
+                  score: { type: integer, minimum: 1, maximum: 5 }
+        score: { type: integer, minimum: 1, maximum: 5, description: 'min(capacity, willingness)' }
+        code: { $ref: '#/components/schemas/RiskProfileCode' }
+        label: { type: string, example: Konservativ }
+        legalBasis: { type: string, example: Art. 12 FIDLEG }
+        note: { type: [string, 'null'], description: Hinweis bei professionellen Kunden (Tragbarkeit vermutet) }
+    Suitability:
+      type: object
+      required: [product, productLabel, use, status, label, note, knowledgePresumed, kidRequired]
+      properties:
+        product: { $ref: '#/components/schemas/ProductCode' }
+        productLabel: { type: string, example: Devisentermingeschäft }
+        use: { type: string, enum: [HEDGING, LIQUIDITY_INVESTMENT] }
+        status: { $ref: '#/components/schemas/SuitabilityStatus' }
+        label: { type: string, example: Nur nach Aufklärung }
+        note: { type: string, example: 'Erfahrung fehlt, Warnhinweis dokumentieren' }
+        knowledgeLevel: { anyOf: [ { $ref: '#/components/schemas/KnowledgeLevel' }, { type: 'null' } ] }
+        knowledgePresumed: { type: boolean }
+        kidRequired: { type: boolean, description: Basisinformationsblatt nötig (Art. 58 FIDLEG) }
+        legalBasis: { type: [string, 'null'] }
+    HedgeOverview:
+      type: object
+      required: [cap, proposals, naturallyHedged, totals]
+      properties:
+        cap: { type: integer, minimum: 0, maximum: 100, description: 'min(100, Treasury-Policy)' }
+        proposals:
+          type: array
+          items: { $ref: '#/components/schemas/HedgeProposal' }
+        naturallyHedged:
+          type: array
+          description: Positionen ≠ 0 mit |Netto CHF| < 0.5
+          items:
+            type: object
+            required: [currency, netPosition, netPositionChf]
+            properties:
+              currency: { $ref: '#/components/schemas/Currency' }
+              netPosition: { type: number }
+              netPositionChf: { type: number }
+        totals:
+          type: object
+          required: [hedgedVolumeChf, carryChf]
+          properties:
+            hedgedVolumeChf: { type: number, description: Summe der nicht gesperrten Währungen }
+            carryChf: { type: number }
+    HedgeProposal:
+      type: object
+      required: [currency, direction, hedgeAction, actionLabel, netPosition, netPositionChf, spotRate, sensitivityChf, sensitivityPctEbit, defaultStartRatio, startRatio, limitedByPolicy, stepDown, blocked, collarAllowed, collarEnabled, collarShare, tranches, averageRatio, hedgedAmountFx, hedgedAmountChf, carryChf, scenario]
+      properties:
+        currency: { $ref: '#/components/schemas/Currency' }
+        direction: { $ref: '#/components/schemas/ExposureDirection' }
+        hedgeAction: { $ref: '#/components/schemas/HedgeAction' }
+        actionLabel: { type: string, example: EUR auf Termin verkaufen }
+        netPosition: { type: number }
+        netPositionChf: { type: number }
+        spotRate: { type: number }
+        sensitivityChf: { type: number }
+        sensitivityPctEbit: { type: number }
+        defaultStartRatio: { type: integer, description: 'nach Profil: 1 → 90, 2 → 80, 3 → 70, 4 → 60, 5 → 50' }
+        requestedStartRatio: { type: [integer, 'null'], description: 'vom Berater gesetzt, sonst null' }
+        startRatio: { type: integer, description: 'wirksam, ≤ cap' }
+        limitedByPolicy: { type: boolean, description: gewünschte Startquote > cap }
+        stepDown: { type: integer, enum: [0, 5, 10, 15] }
+        blocked: { type: boolean, description: Devisentermingeschäft nicht geeignet (R-HED-05) }
+        blockedReason: { type: [string, 'null'] }
+        collarAllowed: { type: boolean }
+        collarEnabled: { type: boolean, description: wirksam }
+        collarShare: { type: number, enum: [0, 0.3] }
+        tranches:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { $ref: '#/components/schemas/Tranche' }
+        averageRatio: { type: number }
+        hedgedAmountFx: { type: number, description: Σ |abgesichertes Volumen| }
+        hedgedAmountChf: { type: number }
+        carryChf: { type: number, description: negativ = Kosten }
+        scenario:
+          type: array
+          description: Kursänderung −15 % bis +15 % in Schritten von 1
+          items: { $ref: '#/components/schemas/ScenarioPoint' }
+    Tranche:
+      type: object
+      required: [index, maturityMonths, tenorYears, forwardRate, ratio, effectiveRatio, amountFx, hedgedAmountFx, collarFloor, collarCap, carryChf]
+      properties:
+        index: { type: integer, minimum: 1, maximum: 4 }
+        maturityMonths: { type: integer, enum: [3, 6, 9, 12] }
+        tenorYears: { type: number, enum: [0.25, 0.5, 0.75, 1.0] }
+        forwardRate: { type: number }
+        ratio: { type: integer }
+        effectiveRatio: { type: integer, description: 0 wenn gesperrt }
+        amountFx: { type: number, description: netPosition / 4 (Vorzeichen wie Position) }
+        hedgedAmountFx: { type: number }
+        collarFloor: { type: number }
+        collarCap: { type: number }
+        carryChf: { type: number }
+      example: { index: 1, maturityMonths: 3, tenorYears: 0.25, forwardRate: 0.935323, ratio: 80, effectiveRatio: 80, amountFx: 3.55, hedgedAmountFx: 2.84, collarFloor: 0.921294, collarCap: 0.963383, carryChf: -0.013282 }
+    ScenarioPoint:
+      type: object
+      required: [shiftPct, spotRate, unhedgedChf, hedgedChf]
+      properties:
+        shiftPct: { type: integer, minimum: -15, maximum: 15 }
+        spotRate: { type: number }
+        unhedgedChf: { type: number }
+        hedgedChf: { type: number }
+      example: { shiftPct: -10, spotRate: 0.846, unhedgedChf: -1.3348, hedgedChf: -0.565894 }
+    LiquidityAllocation:
+      type: object
+      required: [excessLiquidity, horizon, profileCode, noExcess, parts, shiftedProducts]
+      properties:
+        excessLiquidity: { type: number }
+        horizon: { $ref: '#/components/schemas/InvestmentHorizon' }
+        profileCode: { $ref: '#/components/schemas/RiskProfileCode' }
+        noExcess: { type: boolean }
+        parts:
+          type: array
+          description: Reihenfolge DEPOSIT, MONEY_MARKET_FUND, SHORT_TERM_BOND; leer bei noExcess
+          items:
+            type: object
+            required: [product, sharePct, amountChf, suitabilityStatus]
+            properties:
+              product: { $ref: '#/components/schemas/ProductCode' }
+              sharePct: { type: integer, minimum: 0, maximum: 100 }
+              amountChf: { type: number }
+              suitabilityStatus: { $ref: '#/components/schemas/SuitabilityStatus' }
+        shiftedProducts:
+          type: array
+          items: { $ref: '#/components/schemas/ProductCode' }
+        note: { type: [string, 'null'] }
+
+    # ---------- Checkliste und Freigabe ----------
+    ChecklistItemId:
+      type: string
+      description: info, riskBrochure, costDisclosure, kid.<PRODUCT>, warning.<PRODUCT>
+      pattern: '^(info|riskBrochure|costDisclosure|kid\.(FX_FORWARD|ZERO_COST_COLLAR|MONEY_MARKET_FUND)|warning\.(FX_FORWARD|ZERO_COST_COLLAR|MONEY_MARKET_FUND|SHORT_TERM_BOND))$'
+      example: kid.FX_FORWARD
+    ChecklistItem:
+      type: object
+      required: [id, text, shortText, legalBasis, done]
+      properties:
+        id: { $ref: '#/components/schemas/ChecklistItemId' }
+        text: { type: string, example: 'Basisinformationsblatt ausgehändigt: Devisentermingeschäft' }
+        shortText: { type: string, example: Basisinformationsblatt Devisentermingeschäft aushändigen }
+        legalBasis: { type: string, example: Art. 58 FIDLEG }
+        done: { type: boolean }
+        changedAt: { type: [string, 'null'], format: date-time }
+    ChecklistUpdate:
+      type: object
+      required: [done]
+      additionalProperties: false
+      properties:
+        done: { type: boolean }
+    ApprovalStatus:
+      type: string
+      enum: [NOT_APPROVED, APPROVED]
+    BlockerType:
+      type: string
+      enum: [MISSING_INPUT, UNCONFIRMED_ANSWER, OPEN_PROPOSAL, OPEN_CHECKLIST_ITEM, DOCUMENT_PROCESSING]
+    Blocker:
+      type: object
+      required: [type, text]
+      properties:
+        type: { $ref: '#/components/schemas/BlockerType' }
+        key: { type: [string, 'null'], description: 'Fragenschlüssel, Checklisten-ID, Vorschlags- oder Dokument-ID' }
+        text: { type: string, example: 'Bestätigen: Mindestliquidität' }
+    ApprovalState:
+      type: object
+      required: [status, canApprove, blockers]
+      properties:
+        status: { $ref: '#/components/schemas/ApprovalStatus' }
+        canApprove: { type: boolean }
+        blockers:
+          type: array
+          items: { $ref: '#/components/schemas/Blocker' }
+        approvalId: { type: [string, 'null'], format: uuid }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        approvedBy: { type: [string, 'null'] }
+        assessmentVersion: { type: [integer, 'null'], description: freigegebene Version }
+    ApprovalRequest:
+      type: object
+      required: [assessmentVersion]
+      additionalProperties: false
+      properties:
+        assessmentVersion: { type: integer, description: 'Version, die der Berater gesehen hat' }
+    RevocationType:
+      type: string
+      enum: [REVOKED_BY_CHANGE, WITHDRAWN]
+    Approval:
+      type: object
+      required: [id, clientId, assessmentVersion, approvedAt, approvedBy, active, protocol]
+      properties:
+        id: { type: string, format: uuid }
+        clientId: { type: string, format: uuid }
+        assessmentVersion: { type: integer }
+        approvedAt: { type: string, format: date-time }
+        approvedBy: { type: string }
+        active: { type: boolean }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        revokedBy: { type: [string, 'null'] }
+        revocationType: { anyOf: [ { $ref: '#/components/schemas/RevocationType' }, { type: 'null' } ] }
+        revocationReason: { type: [string, 'null'], example: 'ANSWER_CHANGED: goals.policyMaxHedgeRatio' }
+        protocol: { $ref: '#/components/schemas/Protocol' }
+    HedgeSettingUpdate:
+      type: object
+      required: [startRatio, stepDown, collarEnabled]
+      additionalProperties: false
+      properties:
+        startRatio: { type: [integer, 'null'], minimum: 0, maximum: 100, description: null = Standard nach Profil }
+        stepDown: { type: integer, enum: [0, 5, 10, 15], default: 10 }
+        collarEnabled: { type: [boolean, 'null'], description: null = Regelstandard }
+    HedgeSetting:
+      type: object
+      required: [currency, startRatio, stepDown, collarEnabled, updatedAt]
+      properties:
+        currency: { $ref: '#/components/schemas/Currency' }
+        startRatio: { type: [integer, 'null'] }
+        stepDown: { type: integer, enum: [0, 5, 10, 15] }
+        collarEnabled: { type: [boolean, 'null'] }
+        updatedAt: { type: string, format: date-time }
+    Rationale:
+      type: object
+      required: [stale]
+      properties:
+        text: { type: [string, 'null'] }
+        assessmentVersion: { type: [integer, 'null'] }
+        source: { type: [string, 'null'], enum: [AGENT_DRAFT, ADVISOR, null] }
+        savedAt: { type: [string, 'null'], format: date-time }
+        savedBy: { type: [string, 'null'] }
+        stale: { type: boolean, description: gespeicherte Version ≠ aktuelle Assessment-Version }
+    RationaleUpdate:
+      type: object
+      required: [text, assessmentVersion]
+      additionalProperties: false
+      properties:
+        text: { type: string, minLength: 1, maxLength: 8000 }
+        assessmentVersion: { type: integer }
+        source: { type: string, enum: [AGENT_DRAFT, ADVISOR], default: ADVISOR, description: 'AGENT_DRAFT, wenn unverändert übernommen' }
+    Protocol:
+      type: object
+      required: [clientId, status, assessmentVersion, generatedAt, rationaleStale, sections, text]
+      properties:
+        clientId: { type: string, format: uuid }
+        status: { type: string, enum: [DRAFT, APPROVED] }
+        assessmentVersion: { type: integer }
+        generatedAt: { type: string, format: date-time }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        approvedBy: { type: [string, 'null'] }
+        rationaleStale: { type: boolean }
+        sections:
+          type: array
+          description: 9 Abschnitte wie Prototyp `protoSections()`
+          items:
+            type: object
+            required: [title, rows, items, paragraphs]
+            properties:
+              title: { type: string, example: Kunde und Dienstleistung }
+              rows:
+                type: array
+                items:
+                  type: object
+                  required: [label, value]
+                  properties:
+                    label: { type: string }
+                    value: { type: string }
+              items:
+                type: array
+                items: { type: string }
+              paragraphs:
+                type: array
+                items: { type: string }
+        text: { type: string, description: Klartext wie Prototyp `protoText()` }
+
+    # ---------- Audit ----------
+    ActorType:
+      type: string
+      enum: [ADVISOR, SYSTEM, RULE, AGENT]
+    AuditEventType:
+      type: string
+      enum:
+        - CLIENT_CREATED
+        - CLIENT_UPDATED
+        - DOCUMENT_UPLOADED
+        - DOCUMENT_STATUS_CHANGED
+        - DOCUMENT_DELETED
+        - ANSWER_SET
+        - ANSWER_CONFIRMED
+        - PROPOSAL_CREATED
+        - PROPOSAL_ACCEPTED
+        - PROPOSAL_REJECTED
+        - RULE_DECISION
+        - HEDGE_SETTINGS_CHANGED
+        - CHECKLIST_CHANGED
+        - RATIONALE_SAVED
+        - APPROVED
+        - APPROVAL_REVOKED
+        - APPROVAL_WITHDRAWN
+    AuditEvent:
+      type: object
+      required: [id, clientId, occurredAt, actorType, actorName, eventType, message]
+      properties:
+        id: { type: integer, format: int64 }
+        clientId: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        actorType: { $ref: '#/components/schemas/ActorType' }
+        actorName: { type: string, example: Regel }
+        eventType: { $ref: '#/components/schemas/AuditEventType' }
+        message: { type: string, example: 'Kundensegment Privatkunde: 1 von 3 Schwellenwerten überschritten, keine professionelle Tresorerie' }
+        ruleId: { type: [string, 'null'], example: R-SEG-01 }
+        legalBasis: { type: [string, 'null'], example: Art. 4 und 5 FIDLEG }
+        assessmentVersion: { type: [integer, 'null'] }
+        details:
+          type: [object, 'null']
+          description: z.B. {"key":"fin.totalAssets","old":19.2,"new":21.0} oder {"decision":"segment","old":"RETAIL","new":"PROFESSIONAL"}
+          additionalProperties: true
+    AuditEventPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEvent' }
+        nextBefore: { type: [integer, 'null'], format: int64 }
+
+    # ---------- Intern ----------
+    DocumentStatusUpdate:
+      type: object
+      required: [ingestId, status]
+      additionalProperties: false
+      properties:
+        ingestId: { type: string, format: uuid }
+        status: { type: string, enum: [TEXT_EXTRACTED, INDEXED, EXTRACTED, FAILED] }
+        pageCount: { type: [integer, 'null'], minimum: 1 }
+        chunkCount: { type: [integer, 'null'], minimum: 0 }
+        errorCode: { anyOf: [ { $ref: '#/components/schemas/DocumentErrorCode' }, { type: 'null' } ] }
+        errorMessage: { type: [string, 'null'], maxLength: 500 }
+    CitationInput:
+      type: object
+      required: [page, excerpt, verified]
+      additionalProperties: false
+      properties:
+        documentId: { type: [string, 'null'], format: uuid }
+        page: { type: integer, minimum: 1 }
+        locationLabel: { type: [string, 'null'], maxLength: 200 }
+        excerpt: { type: string, maxLength: 600 }
+        verified: { type: boolean }
+    ProposalInput:
+      type: object
+      required: [questionKey, value, confidence]
+      additionalProperties: false
+      properties:
+        questionKey: { $ref: '#/components/schemas/QuestionKey' }
+        value: { $ref: '#/components/schemas/AnswerValue' }
+        confidence: { $ref: '#/components/schemas/Confidence' }
+        rationale: { type: [string, 'null'], maxLength: 1000 }
+        citation: { anyOf: [ { $ref: '#/components/schemas/CitationInput' }, { type: 'null' } ] }
+    ProposalBatch:
+      type: object
+      required: [source, proposals]
+      additionalProperties: false
+      properties:
+        source: { type: string, enum: [DOCUMENT, AGENT], description: RULE erzeugt nur der treasury-service selbst }
+        documentId: { type: [string, 'null'], format: uuid, description: Pflicht bei DOCUMENT }
+        ingestId: { type: [string, 'null'], format: uuid, description: Pflicht bei DOCUMENT; veraltet → 409 stale-ingest }
+        conversationId: { type: [string, 'null'], format: uuid, description: Pflicht bei AGENT }
+        proposals:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { $ref: '#/components/schemas/ProposalInput' }
+    ProposalOutcome:
+      type: string
+      description: APPLIED = als PROPOSED übernommen; OPEN = wartet auf Berater; UNCHANGED = gleicher bestätigter Wert; REJECTED = abgelehnt
+      enum: [APPLIED, OPEN, UNCHANGED, REJECTED]
+    ProposalBatchResult:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            required: [questionKey, outcome]
+            properties:
+              questionKey: { type: string, description: wie gesendet (auch unbekannte Schlüssel) }
+              proposalId: { type: [string, 'null'], format: uuid }
+              outcome: { $ref: '#/components/schemas/ProposalOutcome' }
+              reason:
+                type: [string, 'null']
+                enum: [NOT_EXTRACTABLE, INVALID_VALUE, UNKNOWN_KEY, NOT_APPLICABLE, null]
+    SimulationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        overrides:
+          type: object
+          description: Schlüssel aus QuestionKey → Wert; ersetzt die wirksamen Antworten nur für diese Berechnung
+          propertyNames: { $ref: '#/components/schemas/QuestionKey' }
+          additionalProperties: { $ref: '#/components/schemas/AnswerValue' }
+        hedgeSettings:
+          type: object
+          propertyNames: { $ref: '#/components/schemas/Currency' }
+          additionalProperties: { $ref: '#/components/schemas/HedgeSettingUpdate' }
