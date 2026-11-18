@@ -1,27 +1,55 @@
-import { DocumentStatus, RiskLevel, Suitability } from '../core/models';
+import { ClientSummary, DocumentStatus, RiskLevel, Suitability } from '../core/models';
+import { BadgeTone } from '../shared/badge';
 
-export const DOCUMENT_STATUS_LABEL: Readonly<Record<DocumentStatus, string>> = {
-  UPLOADED: 'Hochgeladen',
-  TEXT_EXTRACTED: 'Text extrahiert',
-  INDEXED: 'Indexiert',
-  EXTRACTED: 'Kennzahlen extrahiert',
-  FAILED: 'Fehlgeschlagen'
+/*
+ * Codes map to badge tones here; their texts are translation keys of the same name,
+ * e.g. `suitability.SUITABLE`, `risk.HIGH`, `documentStatus.INDEXED`.
+ */
+export const DOCUMENT_STEPS: readonly DocumentStatus[] = [
+  'UPLOADED',
+  'TEXT_EXTRACTED',
+  'INDEXED',
+  'EXTRACTED',
+];
+
+export const DOCUMENT_TONE: Readonly<Record<DocumentStatus, BadgeTone>> = {
+  UPLOADED: 'pending',
+  TEXT_EXTRACTED: 'pending',
+  INDEXED: 'pending',
+  EXTRACTED: 'ok',
+  FAILED: 'crit',
 };
 
-export const DOCUMENT_STEPS: readonly DocumentStatus[] = ['UPLOADED', 'TEXT_EXTRACTED', 'INDEXED', 'EXTRACTED'];
-
-export const SUITABILITY_LABEL: Readonly<Record<Suitability, { readonly text: string; readonly css: string }>> = {
-  SUITABLE: { text: 'Geeignet', css: 'ok' },
-  SUITABLE_AFTER_DISCLOSURE: { text: 'Geeignet nach Aufklärung', css: 'warn' },
-  NOT_SUITABLE: { text: 'Nicht geeignet', css: 'crit' },
-  NOT_APPLICABLE: { text: 'Keine Prüfung', css: 'na' }
+export const SUITABILITY_TONE: Readonly<Record<Suitability, BadgeTone>> = {
+  SUITABLE: 'ok',
+  SUITABLE_AFTER_DISCLOSURE: 'warn',
+  NOT_SUITABLE: 'crit',
+  NOT_APPLICABLE: 'neutral',
 };
 
-export const RISK_LABEL: Readonly<Record<RiskLevel, { readonly text: string; readonly css: string }>> = {
-  LOW: { text: 'Risiko tief', css: 'ok' },
-  MEDIUM: { text: 'Risiko mittel', css: 'warn' },
-  HIGH: { text: 'Risiko hoch', css: 'crit' }
+export const RISK_TONE: Readonly<Record<RiskLevel, BadgeTone>> = {
+  LOW: 'ok',
+  MEDIUM: 'warn',
+  HIGH: 'crit',
 };
+
+export type ClientStatus = 'APPROVED' | 'IN_PROGRESS' | 'NEW';
+
+export const CLIENT_STATUS_TONE: Readonly<Record<ClientStatus, BadgeTone>> = {
+  APPROVED: 'ok',
+  IN_PROGRESS: 'pending',
+  NEW: 'new',
+};
+
+export function clientStatus(client: ClientSummary): ClientStatus {
+  if (client.approvalStatus === 'APPROVED') return 'APPROVED';
+  return client.documentCount === 0 && client.segment === null ? 'NEW' : 'IN_PROGRESS';
+}
+
+/** Translation key for counts, e.g. `start.count` → `start.count.one` or `start.count.other`. */
+export function plural(key: string, count: number): string {
+  return `${key}.${count === 1 ? 'one' : 'other'}`;
+}
 
 export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
