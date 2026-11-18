@@ -1,0 +1,1527 @@
+<!doctype html>
+<html lang="de">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8">
+<title>Treasury Kompass</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: Berater-Arbeitsplatz. Weisse Kopfzeile mit Demo-Kunde, nummerierter Prozess-Stepper (echte Abfolge),
+   Arbeitsfläche links, Fallübersicht rechts (sticky; auf schmalen Screens darunter). Rot nur für Aktion und aktiven Schritt. */
+:root{
+  --bg:#f6f5f3; --surface:#ffffff; --bg-soft:#f1efec; --paper:#ffffff;
+  --line:#e4e1dc; --line-strong:#cdc8c1;
+  --fg:#171615; --fg-2:#58544f; --muted:#7d7871;
+  --accent:#e2001a; --accent-strong:#b60016; --accent-soft:#fdebed; --accent-text:#c40018; --on-accent:#ffffff;
+  --ok:#1d7434; --ok-soft:#e5f2e7; --warn:#8f5600; --warn-soft:#fbefd9; --crit:#b8232b; --crit-soft:#fbe8e9;
+  --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --on-series:#ffffff;
+  --grid:#e9e6e1; --axis:#c5c0b9;
+  --tip-bg:#171615; --tip-fg:#f6f5f3;
+  --shadow:0 1px 2px rgba(23,22,21,.05),0 6px 20px rgba(23,22,21,.06);
+  --focus:#171615;
+  --font:"Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111110; --surface:#1b1b1a; --bg-soft:#242422; --paper:#1b1b1a;
+    --line:#2e2d2b; --line-strong:#45423e;
+    --fg:#f3f2ef; --fg-2:#c5c2bb; --muted:#9a968f;
+    --accent:#e5223a; --accent-strong:#ff4257; --accent-soft:#3b171c; --accent-text:#ff6b7b; --on-accent:#ffffff;
+    --ok:#5fc472; --ok-soft:#17301d; --warn:#f0b24d; --warn-soft:#352810; --crit:#ff7070; --crit-soft:#3a1b1b;
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --on-series:#ffffff;
+    --grid:#2c2c2a; --axis:#46443f;
+    --tip-bg:#f3f2ef; --tip-fg:#171615;
+    --shadow:none; --focus:#f3f2ef;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111110; --surface:#1b1b1a; --bg-soft:#242422; --paper:#1b1b1a;
+  --line:#2e2d2b; --line-strong:#45423e;
+  --fg:#f3f2ef; --fg-2:#c5c2bb; --muted:#9a968f;
+  --accent:#e5223a; --accent-strong:#ff4257; --accent-soft:#3b171c; --accent-text:#ff6b7b; --on-accent:#ffffff;
+  --ok:#5fc472; --ok-soft:#17301d; --warn:#f0b24d; --warn-soft:#352810; --crit:#ff7070; --crit-soft:#3a1b1b;
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --on-series:#ffffff;
+  --grid:#2c2c2a; --axis:#46443f;
+  --tip-bg:#f3f2ef; --tip-fg:#171615;
+  --shadow:none; --focus:#f3f2ef;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.wrap{max-width:1260px;margin-inline:auto;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+
+/* Kopfzeile */
+.topbar{background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;padding-block:14px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;min-width:0}
+.brand-mark{width:30px;height:30px;flex:none}
+.bm-ring{fill:none;stroke:var(--fg);stroke-width:2}
+.bm-n{fill:var(--accent)} .bm-s{fill:var(--fg)}
+.brand-name{font-weight:700;font-size:19px;letter-spacing:-.01em}
+.brand-sub{color:var(--muted);font-size:13.5px;padding-left:10px;border-left:1px solid var(--line)}
+@media (max-width:560px){.brand-sub{display:none}}
+.client-switch{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.switch-label{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.seg-ctl{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line-strong);border-radius:8px;padding:3px;background:var(--bg-soft);gap:2px}
+.seg-ctl button{border:0;background:transparent;color:var(--fg-2);font:inherit;font-size:14px;padding:6px 12px;border-radius:6px;cursor:pointer;text-align:left;line-height:1.25}
+.seg-ctl button small{display:block;font-size:12px;color:var(--muted)}
+.seg-ctl button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:0 0 0 1px var(--line-strong)}
+.demo-badge{font-size:12px;font-weight:600;color:var(--fg-2);border:1px solid var(--line-strong);border-radius:999px;padding:3px 10px;white-space:nowrap}
+
+/* Stepper */
+.stepper-band{background:var(--surface);border-bottom:1px solid var(--line)}
+.stepper-scroll{overflow-x:auto;scrollbar-width:none}
+.stepper-scroll::-webkit-scrollbar{display:none}
+.stepper{display:flex;gap:2px;list-style:none;margin:0;padding:0;min-width:max-content}
+.step{display:flex;align-items:center;gap:9px;padding:13px 14px 11px;color:var(--fg-2);text-decoration:none;border-bottom:3px solid transparent;font-weight:500;white-space:nowrap}
+.step:hover{color:var(--fg)}
+.step-num{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;border:1.5px solid var(--line-strong);color:var(--fg-2);font-variant-numeric:tabular-nums}
+.step.done .step-num{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.step.current{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
+.step.current .step-num{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.step-badge{font-size:11.5px;font-weight:700;background:var(--accent-soft);color:var(--accent-text);border-radius:999px;padding:0 7px;line-height:18px}
+
+/* Rahmen */
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:28px;padding-block:28px 40px;align-items:start}
+@media (max-width:1060px){.layout{grid-template-columns:minmax(0,1fr)}}
+main{min-width:0;outline:none}
+.foot{padding-block:0 32px;color:var(--muted);font-size:13px;max-width:1260px}
+
+/* Typografie */
+h1{font-size:30px;line-height:1.15;letter-spacing:-.015em;margin:0 0 6px;font-weight:700;text-wrap:balance}
+h2{font-size:19px;line-height:1.25;margin:0;font-weight:700;letter-spacing:-.005em;text-wrap:balance}
+h3{font-size:16px;line-height:1.3;margin:0;font-weight:600}
+p{margin:0}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin:0 0 4px}
+.lead{color:var(--fg-2);font-size:17px;max-width:65ch}
+.muted{color:var(--muted)}
+.small{font-size:13.5px}
+.view-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+.ref{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.stack{display:grid;gap:18px;grid-template-columns:minmax(0,1fr)}
+.stack > *,.hedge > *,.q > *,.sum > *{min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:22px 24px;min-width:0}
+@media (max-width:560px){.panel{padding:18px 16px}}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin-bottom:14px}
+.panel-head.center{align-items:center}
+.panel > p + p{margin-top:8px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:inherit;font-weight:600;font-size:15px;padding:10px 18px;border-radius:6px;border:1px solid transparent;cursor:pointer;text-decoration:none;line-height:1.2;white-space:nowrap}
+.btn-primary{background:var(--accent);color:var(--on-accent)}
+.btn-primary:hover{background:var(--accent-strong)}
+.btn-secondary{background:var(--surface);color:var(--fg);border-color:var(--line-strong)}
+.btn-secondary:hover{border-color:var(--fg)}
+.btn-ghost{background:transparent;color:var(--fg);padding:8px 10px;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-strong)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn-sm{font-size:13.5px;padding:6px 11px}
+.sr-only:focus-visible + label{outline:2px solid var(--focus);outline-offset:2px}
+
+/* Tabellen */
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th{text-align:left;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line-strong);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{font-weight:700;border-top:1px solid var(--line-strong);border-bottom:0}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.src{color:var(--fg-2);font-size:13.5px;min-width:180px}
+th.num{text-align:right}
+
+/* Formulare */
+.input-num{width:92px;font:inherit;font-variant-numeric:tabular-nums;text-align:right;padding:6px 8px;border:1px solid var(--line-strong);border-radius:4px;background:var(--surface);color:var(--fg)}
+.input-num:focus{border-color:var(--fg);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+select{font:inherit;font-size:14.5px;padding:7px 10px;border:1px solid var(--line-strong);border-radius:4px;background:var(--surface);color:var(--fg);width:100%}
+input[type="range"]{width:100%;accent-color:var(--accent);margin:6px 0 2px}
+input[type="radio"],input[type="checkbox"]{accent-color:var(--fg)}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{position:relative;display:inline-flex}
+.chip input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.chip span{display:inline-block;padding:8px 14px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);color:var(--fg);font-size:14.5px;line-height:1.3}
+.chip:hover span{border-color:var(--fg)}
+.chip input:checked + span{border-color:var(--fg);background:var(--fg);color:var(--bg);font-weight:600}
+.chip input:focus-visible + span{outline:2px solid var(--focus);outline-offset:2px}
+.num-field{display:flex;align-items:center;gap:8px}
+
+/* Status */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:3px 10px 3px 6px;border-radius:999px;white-space:nowrap;line-height:1.3}
+.pill i{font-style:normal;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:var(--surface);flex:none}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.ok i{background:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.warn i{background:var(--warn)}
+.pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.crit i{background:var(--crit)}
+.pill.na{background:var(--bg-soft);color:var(--fg-2)} .pill.na i{background:var(--muted)}
+.tag{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:2px 7px;border-radius:4px;border:1px solid var(--line-strong);color:var(--fg-2);white-space:nowrap;line-height:1.4}
+.tag.mvp{border-color:var(--fg);color:var(--fg)}
+.tag.edited{border-color:var(--accent-text);color:var(--accent-text)}
+.conf{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--fg-2)}
+.conf .bars{display:inline-flex;gap:2px;align-items:flex-end}
+.conf .bars b{width:4px;border-radius:1px;background:var(--line-strong)}
+.conf .bars b:nth-child(1){height:6px} .conf .bars b:nth-child(2){height:9px} .conf .bars b:nth-child(3){height:12px}
+.conf-hoch .bars b{background:var(--fg-2)}
+.conf-mittel .bars b:nth-child(-n+2){background:var(--fg-2)}
+.notice{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:6px;font-size:14px;background:var(--bg-soft);color:var(--fg)}
+.notice.warn{background:var(--warn-soft)} .notice.crit{background:var(--crit-soft)} .notice.ok{background:var(--ok-soft)}
+.notice b.ic{flex:none;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;color:var(--surface);background:var(--fg-2);margin-top:1px}
+.notice.warn b.ic{background:var(--warn)} .notice.crit b.ic{background:var(--crit)} .notice.ok b.ic{background:var(--ok)}
+.demo-note{font-size:13px;color:var(--muted);margin-top:12px}
+
+/* Unterlagen */
+.dropzone{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border:1.5px dashed var(--line-strong);border-radius:8px;padding:16px 18px;background:var(--bg-soft)}
+.dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
+.file-icon{width:38px;height:46px;flex:none}
+.fi-body{fill:var(--surface);stroke:var(--fg-2);stroke-width:1.5}
+.fi-band{fill:var(--accent)} .fi-txt{fill:var(--on-accent);font-size:8px;font-weight:700;font-family:var(--font)}
+.file-meta{display:grid;gap:2px;flex:1 1 220px;min-width:0}
+.file-meta strong{overflow-wrap:anywhere}
+.file-meta span{font-size:13.5px;color:var(--fg-2)}
+.file-actions{display:flex;gap:8px;flex-wrap:wrap}
+.stages{list-style:none;padding:0;margin:14px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;font-size:14px}
+@media (max-width:640px){.stages{grid-template-columns:1fr}}
+.stages li{display:flex;gap:8px;align-items:center;color:var(--muted)}
+.stages li.done,.stages li.active{color:var(--fg)}
+.stages li.active{font-weight:600}
+.st-ic{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line-strong);display:grid;place-items:center;font-size:10px;flex:none}
+.st-ic.ok{background:var(--ok);border-color:var(--ok);color:var(--surface);font-weight:700}
+.spin{width:16px;height:16px;border:2px solid var(--line-strong);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.is-busy{opacity:.5;pointer-events:none;transition:opacity .2s}
+.evidence{margin-top:14px}
+
+/* Risiken */
+.risk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:640px){.risk-grid{grid-template-columns:1fr}}
+.risk-card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;display:grid;gap:6px;align-content:start}
+.rc-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rc-fig{font-size:26px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.rc-fig span{font-size:14px;font-weight:500;color:var(--fg-2)}
+.rc-sub{font-size:13.5px;color:var(--fg-2)}
+.rc-eff{font-size:14.5px;margin-top:4px}
+.rc-foot{margin-top:6px}
+.roadmap-note{font-size:13.5px;color:var(--fg-2)}
+
+/* Charts */
+.chart-host{width:100%;min-height:120px}
+.chart-host svg{display:block}
+.tick{font-size:12px;fill:var(--muted);font-variant-numeric:tabular-nums;font-family:var(--font)}
+.axis-title{font-size:12px;fill:var(--fg-2);font-family:var(--font)}
+.grid-line{stroke:var(--grid);stroke-width:1}
+.zero-line{stroke:var(--axis);stroke-width:1}
+.ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.s1{stroke:var(--series-1)} .s2{stroke:var(--series-2)}
+.f1{fill:var(--series-1)} .f2{fill:var(--series-2)}
+.ring{stroke:var(--surface);stroke-width:2}
+.marker-line{stroke:var(--fg-2);stroke-width:1}
+.cross-line{stroke:var(--muted);stroke-width:1}
+.end-label{font-size:12.5px;fill:var(--fg-2);font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--font)}
+.row-label{font-size:14px;fill:var(--fg);font-family:var(--font);font-weight:600}
+.row-sub{fill:var(--muted);font-weight:400}
+.val-label{font-size:13px;fill:var(--fg);font-weight:600;font-family:var(--font);font-variant-numeric:tabular-nums}
+.hit{fill:transparent;cursor:crosshair}
+.bar-hit{fill:transparent}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;list-style:none;padding:0;margin:0 0 6px;font-size:13.5px;color:var(--fg-2)}
+.legend li{display:flex;align-items:center;gap:7px}
+.legend i{display:inline-block;width:16px;height:3px;border-radius:2px;flex:none}
+.legend i.sq{width:10px;height:10px;border-radius:2px}
+.legend b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+details.tblv{margin-top:10px;font-size:14px}
+details.tblv summary{cursor:pointer;color:var(--fg-2);font-size:13.5px}
+details.tblv[open] summary{margin-bottom:6px}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--tip-bg);color:var(--tip-fg);font-size:13px;padding:8px 10px;border-radius:6px;box-shadow:var(--shadow);max-width:270px;line-height:1.45}
+#tip .k{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+#tip b{font-variant-numeric:tabular-nums}
+
+/* Kacheln */
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:700px){.tiles{grid-template-columns:1fr}}
+.tile{background:var(--bg-soft);border-radius:6px;padding:12px 14px;display:grid;gap:2px;align-content:start}
+.tile-label{font-size:13px;color:var(--fg-2);display:flex;align-items:center;gap:7px}
+.tile-label i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.tile-value{font-size:25px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.tile-sub{font-size:13px;color:var(--muted)}
+
+/* Fragebogen */
+.q-section{display:grid;gap:4px}
+.q-section + .q-section{margin-top:6px}
+.q-section-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.q{padding:14px 0;display:grid;gap:10px}
+.q + .q{border-top:1px solid var(--line)}
+.q-text{font-weight:600;font-size:15.5px;padding:0;max-width:70ch}
+.q-hint{font-size:13.5px;color:var(--fg-2);max-width:70ch}
+.q-pre{background:linear-gradient(var(--accent-soft),var(--accent-soft)) left/3px 100% no-repeat;padding-left:14px}
+.pre{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;font-size:13.5px;color:var(--fg-2)}
+.pre b{color:var(--fg);font-weight:600}
+.filter{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;padding:2px;gap:2px;background:var(--bg-soft)}
+.filter button{border:0;background:transparent;font:inherit;font-size:13.5px;padding:5px 10px;border-radius:4px;color:var(--fg-2);cursor:pointer}
+.filter button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:0 0 0 1px var(--line-strong)}
+table.matrix td.mx,table.matrix th.mx{text-align:center;width:118px}
+table.matrix tbody th{text-transform:none;letter-spacing:0;font-size:14.5px;color:var(--fg);font-weight:500;white-space:normal;border-bottom:1px solid var(--line);padding:10px}
+table.matrix tbody tr:last-child th{border-bottom:0}
+table.matrix input{width:18px;height:18px;cursor:pointer}
+.mx-pre{display:flex;gap:6px 10px;align-items:center;flex-wrap:wrap;margin-top:4px;font-size:12.5px;color:var(--fg-2);font-weight:400}
+
+/* Prüfung */
+.seg-result{display:flex;gap:10px 18px;align-items:baseline;flex-wrap:wrap;padding:14px 16px;background:var(--bg-soft);border-radius:6px;margin-bottom:6px}
+.seg-big{font-size:26px;font-weight:700;letter-spacing:-.01em}
+.decision{list-style:none;counter-reset:d;padding:0;margin:8px 0 0}
+.decision > li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line);align-items:start}
+.decision > li::before{counter-increment:d;content:counter(d);width:23px;height:23px;border-radius:50%;background:var(--bg-soft);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--fg-2)}
+.d-q{font-weight:600}
+.d-why{grid-column:2 / 4;font-size:13.5px;color:var(--fg-2)}
+.d-a{font-weight:700;text-align:right}
+.d-tbl{grid-column:2 / 4;margin-top:4px}
+.d-tbl table{font-size:13.5px}
+.conseq{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.conseq li{display:flex;justify-content:space-between;gap:12px;font-size:14.5px;padding-left:18px;position:relative}
+.conseq li::before{content:"";position:absolute;left:2px;top:9px;width:7px;height:7px;border-radius:50%;background:var(--fg-2)}
+.two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+@media (max-width:760px){.two-col{grid-template-columns:1fr}}
+.factor-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:2px}
+.score{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.factors{list-style:none;padding:0;margin:10px 0 0;display:grid;gap:0}
+.factors li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.factors .fv{color:var(--fg-2);font-size:13px;grid-column:1}
+.factors .dots{grid-column:2;grid-row:1 / 3;align-self:center}
+.dots{display:inline-flex;gap:3px}
+.dots b{width:11px;height:11px;border-radius:2px;background:var(--line)}
+.dots b.on{background:var(--fg)}
+.profile-result{display:flex;gap:8px 16px;align-items:baseline;flex-wrap:wrap;margin-top:18px;padding:14px 16px;border:1px solid var(--fg);border-radius:6px}
+.profile-result strong{font-size:22px}
+
+/* Vorschlag */
+.hedge{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
+@media (max-width:560px){.hedge{padding:18px 16px}}
+.hedge-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.hedge-head p{color:var(--fg-2);font-size:14px;margin-top:2px}
+.hedge-kpi{text-align:right}
+.hedge-kpi span{display:block;font-size:12.5px;color:var(--muted)}
+.hedge-kpi strong{font-size:24px;font-variant-numeric:tabular-nums}
+.hedge-controls{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1.3fr);gap:18px 22px;padding:16px;background:var(--bg-soft);border-radius:6px}
+@media (max-width:820px){.hedge-controls{grid-template-columns:1fr}}
+.ctl{min-width:0}
+.ctl-label{display:flex;justify-content:space-between;gap:10px;font-weight:600;font-size:14px;margin-bottom:4px}
+.ctl-label output{font-variant-numeric:tabular-nums}
+.ctl small{display:block;color:var(--fg-2);font-size:12.5px;line-height:1.4;margin-top:4px}
+.ctl legend{font-weight:600;font-size:14px;margin-bottom:6px;padding:0}
+.radio-list{display:grid;gap:8px}
+.radio-list label{display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer}
+.radio-list label input{margin-top:3px}
+.radio-list label small{margin-top:1px}
+.radio-list label.is-disabled{color:var(--muted);cursor:not-allowed}
+.meter{display:inline-block;width:56px;height:6px;border-radius:3px;background:var(--grid);vertical-align:middle;margin-right:8px;overflow:hidden}
+.meter span{display:block;height:100%;background:var(--series-1);border-radius:3px}
+.carry{font-size:14px;color:var(--fg-2);margin-top:10px}
+.blocked{opacity:.55}
+.tabs{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;padding:2px;gap:2px;background:var(--bg-soft)}
+.tab{border:0;background:transparent;font:inherit;font-size:13.5px;padding:5px 12px;border-radius:4px;color:var(--fg-2);cursor:pointer;font-variant-numeric:tabular-nums}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:0 0 0 1px var(--line-strong)}
+.sc-ctl{max-width:460px;margin-bottom:14px}
+.chart-note{font-size:12.5px;color:var(--muted);margin-top:8px}
+.segbar{display:flex;gap:2px;height:28px;margin:14px 0 10px}
+.segbar .seg{flex-basis:0;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:var(--on-series);font-size:13px;font-weight:600;min-width:0;white-space:nowrap}
+.reasons{display:grid;gap:12px;max-width:72ch}
+.reasons p{font-size:15px}
+.ai-tag{font-size:12px;font-weight:600;color:var(--fg-2);background:var(--bg-soft);border-radius:999px;padding:3px 10px}
+
+/* Protokoll */
+.checks{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.checks label{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;cursor:pointer}
+.checks input{width:17px;height:17px;margin-top:2px;flex:none}
+.checks small{display:block;color:var(--muted);font-size:12.5px}
+.approve-row{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.doc{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:34px 38px;box-shadow:var(--shadow);min-width:0}
+@media (max-width:560px){.doc{padding:22px 18px}}
+.doc-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start;padding-bottom:16px;border-bottom:2px solid var(--fg)}
+.doc-head h2{font-size:22px}
+.doc h3{font-size:12.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-2);margin:22px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.doc dl{display:grid;grid-template-columns:210px minmax(0,1fr);gap:6px 16px;margin:0;font-size:14.5px}
+@media (max-width:560px){.doc dl{grid-template-columns:1fr;gap:2px 0}.doc dd{margin-bottom:6px}}
+.doc dt{color:var(--fg-2)}
+.doc dd{margin:0}
+.doc ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14.5px}
+.doc .doc-p{font-size:14.5px}
+.doc .doc-p + .doc-p{margin-top:8px}
+.sign{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-top:30px}
+@media (max-width:560px){.sign{grid-template-columns:1fr}}
+.sign div{border-top:1px solid var(--fg-2);padding-top:6px;font-size:13px;color:var(--fg-2)}
+.stamp{display:inline-flex;align-items:center;gap:8px}
+
+/* Fallübersicht */
+.sum{position:sticky;top:calc(16px + env(safe-area-inset-top, 0px));display:grid;gap:18px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px}
+@media (max-width:1060px){.sum{position:static}}
+.sum-name{font-size:18px}
+.sum-meta{font-size:13.5px;color:var(--fg-2);margin-top:2px}
+.sum-list{margin:0;display:grid;gap:9px;padding-top:14px;border-top:1px solid var(--line)}
+.sum-list div{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px}
+.sum-list dt{color:var(--fg-2)}
+.sum-list dd{margin:0;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.seg-chip{display:inline-block;font-size:13px;font-weight:700;padding:2px 9px;border-radius:4px;border:1.5px solid var(--fg)}
+.seg-chip.pro{background:var(--fg);color:var(--bg)}
+.sum-block{padding-top:14px;border-top:1px solid var(--line);display:grid;gap:10px}
+.sum-block h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--fg-2);display:flex;align-items:center;gap:8px}
+.count{font-size:11.5px;background:var(--accent);color:var(--on-accent);border-radius:999px;padding:0 7px;line-height:18px;letter-spacing:0}
+.todo-list{list-style:none;padding:0;margin:0;display:grid;gap:7px;font-size:14px}
+.todo-list li{display:flex;gap:8px;align-items:flex-start}
+.todo-list li::before{content:"";flex:none;width:12px;height:12px;border:1.5px solid var(--line-strong);border-radius:3px;margin-top:4px}
+.todo-list a{text-decoration:underline;text-decoration-color:var(--line-strong);text-underline-offset:3px}
+.todo-list a:hover{text-decoration-color:var(--fg)}
+.audit{list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:13.5px}
+.audit li{display:grid;grid-template-columns:42px minmax(0,1fr);gap:8px}
+.audit time{color:var(--muted);font-variant-numeric:tabular-nums}
+.audit .who{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:var(--fg-2)}
+.audit .aref{color:var(--muted)}
+.sum-note{font-size:12.5px;color:var(--muted)}
+.view-nav{display:flex;justify-content:space-between;gap:12px;margin-top:24px;padding-top:20px;border-top:1px solid var(--line);flex-wrap:wrap}
+.audit-full{max-height:none}
+
+@media (prefers-reduced-motion: reduce){
+  .spin{animation:none}
+  .is-busy{transition:none}
+}
+</style>
+
+<div class="shell">
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#unterlagen" aria-label="Treasury Kompass, zum Start">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <circle class="bm-ring" cx="16" cy="16" r="14"></circle>
+          <path class="bm-n" d="M16 5 L20.2 16 L11.8 16 Z"></path>
+          <path class="bm-s" d="M16 27 L11.8 16 L20.2 16 Z"></path>
+        </svg>
+        <span class="brand-name">Treasury Kompass</span>
+        <span class="brand-sub">Absicherung und Anlage für Firmenkunden</span>
+      </a>
+      <div class="client-switch">
+        <span class="switch-label" id="client-label">Demo-Kunde</span>
+        <div class="seg-ctl" role="group" aria-labelledby="client-label" id="client-switch"></div>
+        <span class="demo-badge">Prototyp · Beispieldaten</span>
+      </div>
+    </div>
+  </header>
+  <nav class="stepper-band" aria-label="Beratungsprozess">
+    <div class="wrap stepper-scroll"><ol class="stepper" id="stepper"></ol></div>
+  </nav>
+  <div class="wrap layout">
+    <main id="view" tabindex="-1"></main>
+    <aside id="summary" aria-label="Fallübersicht"></aside>
+  </div>
+  <footer class="wrap foot">
+    Hackathon-Prototyp mit Beispieldaten und vereinfachten Annahmen (Demo-Kurse, Zinssätze, Collar-Bandbreiten). Keine Anlageberatung. Rechtsgrundlagen nach FIDLEG vereinfacht dargestellt.
+  </footer>
+</div>
+<div id="tip" role="tooltip" hidden></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- Konstanten und Beispieldaten ---------- */
+const RATES = { EUR: 0.94, USD: 0.80 };
+const IR = { CHF: 0.0, EUR: 0.02, USD: 0.0375 };
+const STEPS = [
+  { id: 'unterlagen', label: 'Unterlagen' },
+  { id: 'risiken', label: 'Risiken' },
+  { id: 'fragebogen', label: 'Fragebogen' },
+  { id: 'pruefung', label: 'FIDLEG-Prüfung' },
+  { id: 'vorschlag', label: 'Vorschlag' },
+  { id: 'protokoll', label: 'Protokoll' }
+];
+const PROFILES = { 1: 'Sicherheit', 2: 'Konservativ', 3: 'Ausgewogen', 4: 'Wachstum', 5: 'Dynamisch' };
+const PRODUCTS = [
+  { id: 'fwd', name: 'Devisentermingeschäft', short: 'Devisentermingeschäft', use: 'Absicherung', bib: true },
+  { id: 'collar', name: 'Zero-Cost-Collar (Devisenoptionen)', short: 'Zero-Cost-Collar', use: 'Absicherung', bib: true },
+  { id: 'mmf', name: 'Geldmarktfonds CHF', short: 'Geldmarktfonds CHF', use: 'Liquiditätsanlage', bib: true },
+  { id: 'bond', name: 'Obligationen CHF, Investment Grade, kurze Laufzeit', short: 'Obligationen CHF kurz', use: 'Liquiditätsanlage', bib: false },
+  { id: 'dep', name: 'Festgeld und Callgeld', short: 'Festgeld / Callgeld', use: 'Liquiditätsanlage', deposit: true }
+];
+const P = Object.fromEntries(PRODUCTS.map(p => [p.id, p]));
+const KLEVELS = [['keine', 'Keine'], ['kenntnis', 'Kenntnisse'], ['erfahrung', 'Kenntnisse und Erfahrung']];
+const FIN_FIELDS = [
+  ['umsatz', 'Umsatzerlös'], ['bilanz', 'Bilanzsumme'], ['ek', 'Eigenkapital'], ['ebit', 'Betriebsergebnis (EBIT)'],
+  ['liquid', 'Flüssige Mittel'], ['aufwand', 'Betriebsaufwand'], ['kredit', 'Bankkredit, SARON-basiert']
+];
+const EX_STAGES = ['Text und Tabellen erkannt', 'Bilanz und Erfolgsrechnung zugeordnet', 'Anhang: Fremdwährungen und Derivate gelesen', 'Werte plausibilisiert, Fundstellen verknüpft'];
+
+const CLIENTS = {
+  kmu: {
+    name: 'Muster Maschinenbau AG', short: 'Export-KMU', branche: 'Maschinenbau', meta: '140 Mitarbeitende',
+    file: 'Jahresrechnung_2025_Muster_Maschinenbau.pdf', pages: 24,
+    fin: { umsatz: 28.4, bilanz: 19.2, ek: 7.9, ebit: 2.3, liquid: 6.4, aufwand: 26.1, kredit: 6.0 },
+    src: {
+      umsatz: ['Erfolgsrechnung, S. 5', 'hoch'], bilanz: ['Bilanz, S. 4', 'hoch'], ek: ['Bilanz, S. 4', 'hoch'],
+      ebit: ['Erfolgsrechnung, S. 5', 'hoch'], liquid: ['Bilanz, S. 4', 'hoch'],
+      aufwand: ['Erfolgsrechnung, S. 5, Summe Betriebsaufwand', 'mittel'], kredit: ['Anhang Ziff. 5, S. 11', 'hoch']
+    },
+    fx: [
+      { ccy: 'EUR', inflow: 18.7, outflow: 4.5, src: 'Anhang Ziff. 3: Umsatz nach Märkten, auf 12 Monate hochgerechnet' },
+      { ccy: 'USD', inflow: 0, outflow: 3.1, src: 'Kreditorenliste 2025, vom Kunden ergänzt' }
+    ],
+    evidence: 'Anhang Ziff. 7 nennt offene Devisentermingeschäfte über EUR 2.0 Mio. per 31.12.2025. Daraus wird Erfahrung mit Devisentermingeschäften abgeleitet und im Fragebogen zur Bestätigung vorgeschlagen.',
+    tip: 'Zum Ausprobieren: Bilanzsumme auf 21 setzen. Damit sind 2 von 3 Schwellenwerten überschritten, das Unternehmen gilt als grosses Unternehmen und wird professioneller Kunde.',
+    answers: { treasury: 'cfo', optingIn: false, ziel: 'budget', policyMax: 80, horizont: 'lt1', verlust: '2', opp: 'tragbar' },
+    knowledge: { fwd: 'erfahrung', collar: 'keine', mmf: 'kenntnis', bond: 'erfahrung' },
+    prefilled: {
+      mindestLiq: 'Vorschlag aus dem Betriebsaufwand (Erfolgsrechnung, S. 5)',
+      'knowledge.fwd': 'Anhang Ziff. 7, offene Devisentermingeschäfte'
+    }
+  },
+  mid: {
+    name: 'Beispiel Components AG', short: 'Mid-Cap', branche: 'Industriekomponenten', meta: '610 Mitarbeitende',
+    file: 'Geschaeftsbericht_2025_Beispiel_Components.pdf', pages: 86,
+    fin: { umsatz: 146.0, bilanz: 112.0, ek: 46.0, ebit: 12.8, liquid: 28.0, aufwand: 133.2, kredit: 25.0 },
+    src: {
+      umsatz: ['Konzernerfolgsrechnung, S. 52', 'hoch'], bilanz: ['Konzernbilanz, S. 51', 'hoch'], ek: ['Konzernbilanz, S. 51', 'hoch'],
+      ebit: ['Konzernerfolgsrechnung, S. 52', 'hoch'], liquid: ['Konzernbilanz, S. 51', 'hoch'],
+      aufwand: ['Konzernerfolgsrechnung, S. 52', 'hoch'], kredit: ['Anhang Ziff. 14, S. 66', 'hoch']
+    },
+    fx: [
+      { ccy: 'EUR', inflow: 85.4, outflow: 33.0, src: 'Segmentbericht, S. 41: Umsatz und Einkauf nach Währungen' },
+      { ccy: 'USD', inflow: 33.0, outflow: 12.0, src: 'Segmentbericht, S. 41' }
+    ],
+    evidence: 'Anhang Ziff. 9 nennt Devisentermingeschäfte (Kontraktvolumen CHF 38 Mio.) und Devisenoptionen (CHF 12 Mio.). Der Geschäftsbericht beschreibt ein Group Treasury mit 3 Vollzeitstellen.',
+    tip: 'Zum Ausprobieren: Im Fragebogen Opting-in wählen. Das Unternehmen wird dann wie ein Privatkunde behandelt, mit vollständiger Eignungsprüfung.',
+    answers: { treasury: 'abteilung', optingIn: false, ziel: 'margen', policyMax: 90, horizont: '1to3', verlust: '5', opp: 'tragbar' },
+    knowledge: { fwd: 'erfahrung', collar: 'erfahrung', mmf: 'erfahrung', bond: 'erfahrung' },
+    prefilled: {
+      treasury: 'Geschäftsbericht, S. 34: Group Treasury mit 3 Vollzeitstellen',
+      mindestLiq: 'Vorschlag aus dem Betriebsaufwand (Konzernerfolgsrechnung, S. 52)',
+      'knowledge.fwd': 'Anhang Ziff. 9, Devisentermingeschäfte',
+      'knowledge.collar': 'Anhang Ziff. 9, Devisenoptionen'
+    }
+  }
+};
+
+const OPTS = {
+  treasury: [['abteilung', 'Eigene Treasury-Abteilung mit Fachpersonen'], ['cfo', 'CFO oder Buchhaltung, neben anderen Aufgaben'], ['extern', 'An externen Dienstleister ausgelagert']],
+  optingIn: [[false, 'Nein'], [true, 'Ja, Opting-in erklären']],
+  ziel: [['budget', 'Budgetsicherheit: Plankurs halten'], ['margen', 'Margen schützen, Chancen teilweise offen lassen'], ['kosten', 'Absicherungskosten tief halten']],
+  policyMax: [[60, '60 %'], [80, '80 %'], [90, '90 %'], [100, '100 % oder keine Vorgabe']],
+  horizont: [['lt1', 'Unter 1 Jahr'], ['1to3', '1 bis 3 Jahre'], ['gt3', 'Über 3 Jahre']],
+  verlust: [['0', 'Keiner, Kapitalerhalt'], ['2', 'Bis 2 %'], ['5', 'Bis 5 %'], ['gt5', 'Mehr als 5 %']],
+  opp: [['ok', 'Akzeptabel, Planungssicherheit zählt'], ['tragbar', 'Ärgerlich, aber tragbar'], ['nein', 'Nicht akzeptabel']]
+};
+const SECTIONS = [
+  { id: 'A', title: 'Kundensegmentierung', ref: 'Art. 4 und 5 FIDLEG' },
+  { id: 'B', title: 'Ziele und Bedürfnisse', ref: 'Art. 12 FIDLEG' },
+  { id: 'C', title: 'Risikobereitschaft', ref: 'Art. 12 FIDLEG' },
+  { id: 'D', title: 'Kenntnisse und Erfahrungen', ref: 'Art. 12 FIDLEG' }
+];
+const QUESTIONS = [
+  { id: 'treasury', sec: 'A', text: 'Wie werden die Finanzen des Unternehmens geführt?', hint: 'Professionelle Tresorerie heisst: Mindestens eine fachlich ausgewiesene Person mit Erfahrung im Finanzbereich ist mit der Bewirtschaftung der Finanzmittel betraut.' },
+  { id: 'optingIn', sec: 'A', type: 'bool', text: 'Soll das Unternehmen als Privatkunde behandelt werden?', hint: 'Opting-in: höheres Schutzniveau mit vollständiger Eignungsprüfung und Basisinformationsblättern.', showIf: m => m.professionalBase },
+  { id: 'ziel', sec: 'B', text: 'Was ist das Hauptziel der Absicherung?' },
+  { id: 'policyMax', sec: 'B', type: 'num', text: 'Welche maximale Absicherungsquote erlaubt die Treasury-Policy?' },
+  { id: 'mindestLiq', sec: 'B', type: 'number', text: 'Welche Mindestliquidität muss jederzeit verfügbar bleiben?', hint: m => `Richtwert: 1.5 Monate Betriebsaufwand, CHF ${fmt(m.suggestLiq)} Mio.` },
+  { id: 'horizont', sec: 'B', text: 'Wie lange kann die überschüssige Liquidität angelegt werden?' },
+  { id: 'verlust', sec: 'C', text: 'Welcher vorübergehende Wertrückgang der Liquiditätsanlage innert 12 Monaten wäre tragbar?' },
+  { id: 'opp', sec: 'C', text: 'Der Euro steigt nach Abschluss der Absicherung um 8 %. Wie beurteilt die Geschäftsleitung den entgangenen Kursgewinn?' },
+  { id: 'knowledge', sec: 'D', type: 'matrix', text: 'Welche Kenntnisse und Erfahrungen haben die zuständigen Personen?' }
+];
+const QSHORT = {
+  treasury: 'Treasury-Organisation', optingIn: 'Opting-in', ziel: 'Ziel der Absicherung', policyMax: 'Maximale Absicherungsquote',
+  mindestLiq: 'Mindestliquidität', horizont: 'Anlagehorizont', verlust: 'Tragbarer Wertrückgang', opp: 'Entgangener Kursgewinn',
+  'knowledge.fwd': 'Erfahrung mit Devisentermingeschäften', 'knowledge.collar': 'Erfahrung mit Devisenoptionen'
+};
+
+/* ---------- Helfer ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const nfCache = {};
+const nf = d => nfCache[d] || (nfCache[d] = new Intl.NumberFormat('de-CH', { minimumFractionDigits: d, maximumFractionDigits: d }));
+const fmt = (v, d = 1) => nf(d).format(v).replace('-', '−');
+const sgn = (v, d = 2) => { const r = Number(v.toFixed(d)); if (r === 0) return nf(d).format(0); return (r > 0 ? '+' : '−') + nf(d).format(Math.abs(r)); };
+const pct = (v, d = 0) => fmt(v * 100, d) + ' %';
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const avg = a => a.reduce((s, x) => s + x, 0) / (a.length || 1);
+const round1 = v => Math.round(v * 10) / 10;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const strip = s => String(s).replace(/<[^>]+>/g, '');
+const optLabel = (id, v) => { const o = (OPTS[id] || []).find(x => x[0] === v); return o ? o[1] : String(v); };
+const kLabel = v => (KLEVELS.find(x => x[0] === v) || [v, v])[1];
+const nowHM = () => new Date().toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+const todayStr = () => new Date().toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const pill = (cls, icon, text) => `<span class="pill ${cls}"><i aria-hidden="true">${icon}</i>${text}</span>`;
+const ICON = { ok: '✓', warn: '!', crit: '✕', na: '–' };
+const eligPill = e => pill(e.status, ICON[e.status], e.label);
+const levelPill = l => l === 'crit' ? pill('crit', '!', 'Risiko hoch') : l === 'warn' ? pill('warn', '!', 'Risiko mittel') : pill('ok', '✓', 'Risiko tief');
+const levelOf = p => p >= 0.3 ? 'crit' : p >= 0.1 ? 'warn' : 'ok';
+const shiftLabel = p => (p > 0 ? '+' : p < 0 ? '−' : '±') + Math.abs(p) + ' %';
+const notice = (cls, html) => `<div class="notice ${cls}"><b class="ic" aria-hidden="true">${cls === 'ok' ? '✓' : cls === 'crit' ? '✕' : '!'}</b><div>${html}</div></div>`;
+
+/* ---------- Zustand ---------- */
+let state = null;
+let exToken = 0;
+
+function loadClient(id) {
+  exToken++;
+  const c = CLIENTS[id];
+  const fin = { ...c.fin };
+  state = {
+    clientId: id,
+    step: state ? state.step : 'unterlagen',
+    file: c.file, extracting: false, exStage: 0,
+    fin, fx: c.fx.map(x => ({ ...x })),
+    answers: { ...c.answers, mindestLiq: round1(fin.aufwand / 12 * 1.5) },
+    knowledge: { ...c.knowledge },
+    confirmed: {},
+    hedge: { EUR: { start: null, step: 10, collar: null }, USD: { start: null, step: 10, collar: null } },
+    scenario: { ccy: null, shift: -10 },
+    checklist: {},
+    approved: null,
+    events: [],
+    qFilter: 'alle'
+  };
+}
+
+function logEvent(text, who = 'Berater') {
+  state.events.push({ time: nowHM(), who, text });
+  if (state.events.length > 40) state.events.shift();
+}
+function invalidate() {
+  if (state.approved) { state.approved = null; logEvent('Freigabe aufgehoben, weil Angaben geändert wurden', 'System'); }
+}
+
+/* ---------- Regelwerk ---------- */
+function band(v, cuts) { let s = 1; cuts.forEach(c => { if (v >= c) s++; }); return s; }
+
+function compute() {
+  const c = CLIENTS[state.clientId], f = state.fin, a = state.answers, k = state.knowledge;
+  const m = { c };
+
+  // Kundensegment (Art. 4/5 FIDLEG)
+  m.th = [
+    { label: 'Bilanzsumme', value: f.bilanz, limit: 20 },
+    { label: 'Umsatzerlös', value: f.umsatz, limit: 40 },
+    { label: 'Eigenkapital', value: f.ek, limit: 2 }
+  ].map(t => ({ ...t, hit: t.value > t.limit }));
+  m.hits = m.th.filter(t => t.hit).length;
+  m.gross = m.hits >= 2;
+  m.profTreasury = a.treasury === 'abteilung';
+  m.professionalBase = m.gross || m.profTreasury;
+  m.optingIn = m.professionalBase && a.optingIn === true;
+  m.isPro = m.professionalBase && !m.optingIn;
+  m.segName = m.isPro ? 'Professioneller Kunde' : 'Privatkunde';
+  if (m.isPro) {
+    m.segReason = m.gross
+      ? `grosses Unternehmen, ${m.hits} von 3 Schwellenwerten überschritten${m.profTreasury ? ', professionelle Tresorerie' : ''}`
+      : 'Unternehmen mit professioneller Tresorerie';
+  } else {
+    m.segReason = m.optingIn ? 'Opting-in erklärt' : `${m.hits} von 3 Schwellenwerten überschritten, keine professionelle Tresorerie`;
+  }
+
+  // Exposures
+  m.fx = state.fx.map(x => {
+    const S = RATES[x.ccy], net = round2(x.inflow - x.outflow), netCHF = net * S, sens = Math.abs(netCHF) * 0.1;
+    const sensPct = f.ebit > 0 ? sens / f.ebit : 0;
+    return { ...x, S, net, netCHF, sens, sensPct, long: net > 0, level: levelOf(sensPct) };
+  });
+  const fxSens = m.fx.reduce((s, x) => s + x.sens, 0);
+  m.fxSensPct = f.ebit > 0 ? fxSens / f.ebit : 1;
+  m.zinsSens = f.kredit * 0.01;
+  m.zinsPct = f.ebit > 0 ? m.zinsSens / f.ebit : 0;
+  m.stress = m.fx.filter(x => x.net !== 0).map(x => ({
+    label: `${x.ccy} ${x.long ? '−' : '+'}10 %`, sub: x.long ? 'Zuflüsse verlieren an Wert' : 'Einkauf wird teurer', pctv: x.sensPct, chf: x.sens
+  })).concat([{ label: 'Zins +1 Prozentpunkt', sub: 'Bankkredit SARON-basiert', pctv: m.zinsPct, chf: m.zinsSens }]);
+
+  // Risikofähigkeit (objektiv)
+  m.ekQuote = f.bilanz > 0 ? f.ek / f.bilanz : 0;
+  m.monthly = f.aufwand / 12;
+  m.suggestLiq = round1(m.monthly * 1.5);
+  m.excess = Math.max(0, round2(f.liquid - a.mindestLiq));
+  m.excessMonths = m.monthly > 0 ? m.excess / m.monthly : 0;
+  m.margin = f.umsatz > 0 ? f.ebit / f.umsatz : 0;
+  m.capFactors = [
+    { label: 'Eigenkapitalquote', value: pct(m.ekQuote), score: band(m.ekQuote, [0.2, 0.3, 0.4, 0.5]) },
+    { label: 'Überschussliquidität', value: `${fmt(m.excessMonths)} Monate Betriebsaufwand`, score: band(m.excessMonths, [1, 2, 4, 6]) },
+    { label: 'EBIT-Marge', value: pct(m.margin, 1), score: band(m.margin, [0.03, 0.06, 0.09, 0.12]) },
+    { label: 'Ungesichertes Währungsrisiko', value: `${pct(m.fxSensPct)} des EBIT bei 10 % Kursbewegung`, score: 6 - band(m.fxSensPct, [0.05, 0.15, 0.3, 0.5]) }
+  ];
+  m.capacity = clamp(Math.round(avg(m.capFactors.map(x => x.score))), 1, 5);
+
+  // Risikobereitschaft (subjektiv)
+  const W = { ziel: { budget: 1, margen: 3, kosten: 4 }, verlust: { '0': 1, '2': 2, '5': 3, gt5: 5 }, opp: { ok: 1, tragbar: 3, nein: 4 } };
+  m.willFactors = [
+    { label: 'Ziel der Absicherung', value: optLabel('ziel', a.ziel), score: W.ziel[a.ziel] },
+    { label: 'Tragbarer Wertrückgang', value: optLabel('verlust', a.verlust), score: W.verlust[a.verlust] },
+    { label: 'Entgangener Kursgewinn', value: optLabel('opp', a.opp), score: W.opp[a.opp] }
+  ];
+  m.willingness = clamp(Math.round(avg(m.willFactors.map(x => x.score))), 1, 5);
+  m.profile = Math.min(m.capacity, m.willingness);
+
+  // Eignung je Produkt (Art. 12/14 FIDLEG)
+  m.elig = {};
+  PRODUCTS.forEach(p => {
+    let e;
+    if (p.deposit) e = { status: 'na', label: 'Keine Prüfung nötig', note: 'Einlage, kein Finanzinstrument nach FIDLEG', ref: '' };
+    else if (m.isPro) e = { status: 'ok', label: 'Geeignet', note: 'Kenntnisse und Erfahrung vermutet', ref: '' };
+    else if (k[p.id] === 'erfahrung') e = { status: 'ok', label: 'Geeignet', note: 'Kenntnisse und Erfahrung vorhanden', ref: 'Art. 12 FIDLEG' };
+    else if (k[p.id] === 'kenntnis') e = { status: 'warn', label: 'Nur nach Aufklärung', note: 'Erfahrung fehlt, Warnhinweis dokumentieren', ref: 'Art. 12 FIDLEG' };
+    else e = { status: 'crit', label: 'Nicht geeignet', note: 'keine Kenntnisse, abraten', ref: 'Art. 14 FIDLEG' };
+    e.bib = !m.isPro && !!p.bib;
+    m.elig[p.id] = e;
+  });
+
+  // Absicherungsvorschlag
+  m.cap = Math.min(100, a.policyMax);
+  const defStart = { 1: 90, 2: 80, 3: 70, 4: 60, 5: 50 }[m.profile];
+  const fwdE = m.elig.fwd, colE = m.elig.collar;
+  m.hedges = m.fx.filter(x => Math.abs(x.netCHF) >= 0.5).map(x => {
+    const hs = state.hedge[x.ccy];
+    const wanted = hs.start == null ? defStart : hs.start;
+    const start = Math.min(wanted, m.cap);
+    const blocked = fwdE.status === 'crit';
+    const collarAllowed = !blocked && colE.status !== 'crit';
+    const collarDefault = colE.status === 'ok' && a.opp !== 'ok';
+    const collarOn = collarAllowed && (hs.collar == null ? collarDefault : hs.collar);
+    const collarShare = collarOn ? 0.3 : 0;
+    const tranches = [1, 2, 3, 4].map(i => {
+      const t = i / 4, F = x.S * (1 + IR.CHF * t) / (1 + IR[x.ccy] * t);
+      const ratio = clamp(start - (i - 1) * hs.step, 0, m.cap);
+      const eff = blocked ? 0 : ratio;
+      const amount = x.net / 4, hedged = amount * eff / 100;
+      return {
+        i, label: `${i * 3} Monate`, t, F, ratio, eff, amount, hedged,
+        floor: x.long ? F * 0.985 : F * 0.97, cap: x.long ? F * 1.03 : F * 1.015,
+        carry: hedged * (1 - collarShare) * (F - x.S)
+      };
+    });
+    return {
+      ...x, start, limited: wanted > m.cap, step: hs.step, blocked, collarAllowed, collarOn, collarShare, tranches,
+      avgRatio: avg(tranches.map(t => t.eff)),
+      hedgedFx: tranches.reduce((s, t) => s + Math.abs(t.hedged), 0),
+      carry: tranches.reduce((s, t) => s + t.carry, 0)
+    };
+  });
+  m.hedges.forEach(h => { h.hedgedCHF = h.hedgedFx * h.S; });
+  m.smallFx = m.fx.filter(x => x.net !== 0 && Math.abs(x.netCHF) < 0.5);
+
+  // Liquiditätsanlage
+  const ALLOC = {
+    lt1: { 1: [70, 30, 0], 2: [45, 40, 15], 3: [35, 40, 25], 4: [30, 40, 30], 5: [30, 40, 30] },
+    '1to3': { 1: [50, 30, 20], 2: [30, 30, 40], 3: [20, 25, 55], 4: [15, 25, 60], 5: [15, 25, 60] },
+    gt3: { 1: [40, 30, 30], 2: [20, 25, 55], 3: [10, 20, 70], 4: [10, 20, 70], 5: [10, 20, 70] }
+  };
+  let [dep, mmf, bond] = ALLOC[a.horizont][m.profile];
+  const shifted = [];
+  if (m.elig.bond.status === 'crit' && bond > 0) { if (m.elig.mmf.status !== 'crit') mmf += bond; else dep += bond; shifted.push('bond'); bond = 0; }
+  if (m.elig.mmf.status === 'crit' && mmf > 0) { dep += mmf; shifted.push('mmf'); mmf = 0; }
+  m.liq = {
+    shifted,
+    parts: [['dep', dep, 'var(--series-1)'], ['mmf', mmf, 'var(--series-2)'], ['bond', bond, 'var(--series-3)']]
+      .map(([id, share, color]) => ({ id, share, color, amount: m.excess * share / 100, p: P[id] }))
+  };
+
+  // Empfohlene Produkte, Checkliste, offene Punkte
+  m.rec = [];
+  if (m.hedges.some(h => !h.blocked)) m.rec.push('fwd');
+  if (m.hedges.some(h => h.collarOn)) m.rec.push('collar');
+  if (m.excess > 0) m.liq.parts.forEach(p => { if (p.share > 0) m.rec.push(p.id); });
+  const bibNames = m.rec.filter(id => m.elig[id].bib).map(id => P[id].short);
+  const warnIds = m.rec.filter(id => m.elig[id].status === 'warn');
+  m.checklist = [
+    { id: 'info', text: m.isPro ? 'Informationen zu Finanzdienstleister, Dienstleistung, Risiken und Kosten abgegeben (Verzicht möglich)' : 'Informationen zu Finanzdienstleister, Dienstleistung, Risiken und Kosten abgegeben', short: 'Informationen abgeben', ref: 'Art. 8 FIDLEG' },
+    ...(bibNames.length ? [{ id: 'bib', text: `Basisinformationsblätter ausgehändigt: ${bibNames.join(', ')}`, short: 'Basisinformationsblätter aushändigen', ref: 'Art. 58 FIDLEG' }] : []),
+    { id: 'risk', text: 'Broschüre «Risiken im Handel mit Finanzinstrumenten» abgegeben', short: 'Risikobroschüre abgeben', ref: 'Art. 8 FIDLEG' },
+    { id: 'kosten', text: 'Kosten, Marge im Terminkurs und allfällige Entschädigungen Dritter offengelegt', short: 'Kosten offenlegen', ref: 'Art. 26 FIDLEG' },
+    ...warnIds.map(id => ({ id: 'warn-' + id, text: `Aufklärung und Warnhinweis dokumentiert: ${P[id].short}`, short: `Warnhinweis ${P[id].short} dokumentieren`, ref: 'Art. 14 FIDLEG' }))
+  ];
+  m.checklistOpen = m.checklist.filter(i => !state.checklist[i.id]);
+  m.unconfirmed = Object.keys(c.prefilled).filter(key => !state.confirmed[key]);
+  m.canApprove = !m.unconfirmed.length && !m.checklistOpen.length && !state.extracting;
+  m.todos = [
+    ...m.unconfirmed.map(key => ({ text: `Bestätigen: ${QSHORT[key]}`, step: 'fragebogen' })),
+    ...m.checklistOpen.map(i => ({ text: i.short, step: 'protokoll' })),
+    ...(state.approved ? [] : [{ text: 'Vorschlag freigeben', step: 'protokoll' }])
+  ];
+
+  // Audit-Trail
+  m.audit = [
+    { time: '09:02', who: 'System', text: `Unterlagen ausgelesen: 7 Kennzahlen, ${state.fx.length} Fremdwährungen, je mit Fundstelle` },
+    { time: '09:03', who: 'Regel', text: `Kundensegment ${m.segName}: ${m.segReason}`, ref: 'Art. 4/5 FIDLEG' },
+    { time: '09:03', who: 'Regel', text: `Risikoprofil ${PROFILES[m.profile]}: Risikofähigkeit ${m.capacity}/5, Risikobereitschaft ${m.willingness}/5`, ref: 'Art. 12 FIDLEG' },
+    ...PRODUCTS.filter(p => ['warn', 'crit'].includes(m.elig[p.id].status)).map(p => ({ time: '09:04', who: 'Regel', text: `${p.short}: ${m.elig[p.id].label}, ${m.elig[p.id].note}`, ref: m.elig[p.id].ref })),
+    ...m.hedges.filter(h => h.limited).map(h => ({ time: '09:04', who: 'Regel', text: `Absicherungsquote ${h.ccy} auf ${m.cap} % begrenzt (Treasury-Policy)` }))
+  ].concat(state.events);
+  return m;
+}
+function round2(v) { return Math.round(v * 100) / 100; }
+
+function scenarioEffect(h, s) {
+  const S1 = h.S * (1 + s);
+  let hedged = 0;
+  h.tranches.forEach(t => {
+    const fwd = t.hedged * (1 - h.collarShare), col = t.hedged * h.collarShare, open = t.amount - t.hedged;
+    const colRate = clamp(S1, t.floor, t.cap);
+    hedged += fwd * (t.F - h.S) + col * (colRate - h.S) + open * (S1 - h.S);
+  });
+  return { unhedged: h.net * (S1 - h.S), hedged };
+}
+function scenarioHedge(m) {
+  if (!m.hedges.length) return null;
+  return m.hedges.find(h => h.ccy === state.scenario.ccy) || m.hedges[0];
+}
+
+/* ---------- Bausteine ---------- */
+function head(eyebrow, title, lead, right = '') {
+  return `<div class="view-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="lead">${lead}</p></div>${right}</div>`;
+}
+function nav(i) {
+  const prev = STEPS[i - 1], next = STEPS[i + 1];
+  return `<div class="view-nav">
+    ${prev ? `<button class="btn btn-secondary" data-action="goto" data-step="${prev.id}">Zurück: ${prev.label}</button>` : '<span></span>'}
+    ${next ? `<button class="btn btn-primary" data-action="goto" data-step="${next.id}">Weiter: ${next.label}</button>` : ''}
+  </div>`;
+}
+const fileIcon = `<svg class="file-icon" viewBox="0 0 38 46" aria-hidden="true"><path class="fi-body" d="M3 2 H26 L35 11 V44 H3 Z"></path><path class="fi-body" d="M26 2 V11 H35"></path><rect class="fi-band" x="0" y="26" width="28" height="12" rx="2"></rect><text class="fi-txt" x="14" y="35" text-anchor="middle">PDF</text></svg>`;
+const confTag = c => `<span class="conf conf-${c}"><span class="bars" aria-hidden="true"><b></b><b></b><b></b></span>${c}</span>`;
+const dots = s => `<span class="dots" role="img" aria-label="${s} von 5">${[1, 2, 3, 4, 5].map(i => `<b class="${i <= s ? 'on' : ''}"></b>`).join('')}</span>`;
+
+/* ---------- Schritt 1: Unterlagen ---------- */
+function viewUnterlagen(m) {
+  const c = m.c, f = state.fin, busy = state.extracting;
+  const stages = EX_STAGES.map((s, i) => {
+    const st = (!busy || i < state.exStage) ? 'done' : (i === state.exStage ? 'active' : 'pending');
+    const ic = st === 'done' ? '<span class="st-ic ok" aria-hidden="true">✓</span>' : st === 'active' ? '<span class="spin" aria-hidden="true"></span>' : '<span class="st-ic" aria-hidden="true"></span>';
+    return `<li class="${st}">${ic}<span>${s}</span></li>`;
+  }).join('');
+  const finRows = FIN_FIELDS.map(([key, label]) => {
+    const [src, conf] = c.src[key];
+    const edited = Math.abs(f[key] - c.fin[key]) > 1e-9;
+    return `<tr>
+      <td><label for="fin-${key}">${label}</label></td>
+      <td class="num"><input class="input-num" type="number" inputmode="decimal" step="0.1" min="0" id="fin-${key}" data-bind="fin.${key}" value="${f[key]}"></td>
+      <td class="src">${edited ? '<span class="tag edited">Korrigiert</span> ' : ''}${src}</td>
+      <td>${confTag(conf)}</td></tr>`;
+  }).join('');
+  const fxRows = state.fx.map((x, i) => `<tr>
+      <td><strong>${x.ccy}</strong></td>
+      <td class="num"><input class="input-num" type="number" inputmode="decimal" step="0.1" min="0" id="fx-${i}-in" data-bind="fx.${i}.inflow" value="${x.inflow}" aria-label="${x.ccy} Zuflüsse in Millionen"></td>
+      <td class="num"><input class="input-num" type="number" inputmode="decimal" step="0.1" min="0" id="fx-${i}-out" data-bind="fx.${i}.outflow" value="${x.outflow}" aria-label="${x.ccy} Abflüsse in Millionen"></td>
+      <td class="num"><strong>${sgn(x.inflow - x.outflow, 1)}</strong></td>
+      <td class="src">${x.src}</td></tr>`).join('');
+  return `${head('Schritt 1 von 6', 'Unterlagen', 'Die Jahresrechnung wird ausgelesen. Jede Kennzahl ist mit ihrer Fundstelle belegt und kann korrigiert werden.')}
+  <div class="stack">
+    <section class="panel">
+      <div class="dropzone" id="dropzone">
+        ${fileIcon}
+        <div class="file-meta"><strong>${esc(state.file)}</strong><span>${busy ? 'Wird ausgelesen …' : `${c.pages} Seiten · ausgelesen`}</span></div>
+        <div class="file-actions">
+          <input type="file" id="upload" accept=".pdf,application/pdf" class="sr-only">
+          <label class="btn btn-secondary btn-sm" for="upload">Andere Datei wählen</label>
+          <button class="btn btn-ghost btn-sm" data-action="reextract" ${busy ? 'disabled' : ''}>Erneut auslesen</button>
+        </div>
+      </div>
+      <ul class="stages" aria-live="polite">${stages}</ul>
+      <p class="demo-note">Demo: Die Extraktion ist simuliert und verwendet die Beispieldaten des gewählten Kunden. Eine PDF-Datei kann auch ins Feld gezogen werden.</p>
+    </section>
+    <section class="panel ${busy ? 'is-busy' : ''}">
+      <div class="panel-head"><h2>Kennzahlen aus der Jahresrechnung</h2><span class="ref">CHF Mio. · Geschäftsjahr 2025</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Kennzahl</th><th class="num">Wert</th><th>Fundstelle</th><th>Sicherheit</th></tr></thead>
+        <tbody>${finRows}</tbody>
+      </table></div>
+      <div class="evidence">${notice('', c.tip)}</div>
+    </section>
+    <section class="panel ${busy ? 'is-busy' : ''}">
+      <div class="panel-head"><h2>Fremdwährungsflüsse, nächste 12 Monate</h2><span class="ref">Mio. Fremdwährung</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Währung</th><th class="num">Zuflüsse</th><th class="num">Abflüsse</th><th class="num">Netto</th><th>Fundstelle</th></tr></thead>
+        <tbody>${fxRows}</tbody>
+      </table></div>
+      <div class="evidence">${notice('', `<b>Hinweis aus dem Anhang:</b> ${c.evidence}`)}</div>
+    </section>
+  </div>
+  ${nav(0)}`;
+}
+
+/* ---------- Schritt 2: Risiken ---------- */
+function viewRisiken(m) {
+  const f = state.fin;
+  const cards = m.fx.map(x => `<article class="risk-card">
+      <div class="rc-head"><h3>Währung ${x.ccy}</h3><span class="tag mvp">Im MVP</span></div>
+      <p class="rc-fig">${sgn(x.net, 1)} <span>Mio. ${x.ccy} netto</span></p>
+      <p class="rc-sub">Zuflüsse ${fmt(x.inflow)} · Abflüsse ${fmt(x.outflow)} · rund CHF ${fmt(Math.abs(x.netCHF))} Mio.</p>
+      <p class="rc-eff">${x.net === 0 ? 'Keine Nettoposition' : `${x.ccy} ${x.long ? '−' : '+'}10 %: EBIT ${sgn(-x.sens, 2)} Mio. CHF`}</p>
+      <div class="rc-foot">${x.net === 0 ? pill('ok', '✓', 'Kein Risiko') : levelPill(x.level)}</div>
+    </article>`);
+  cards.push(`<article class="risk-card">
+      <div class="rc-head"><h3>Zinsen</h3><span class="tag">Roadmap</span></div>
+      <p class="rc-fig">${fmt(f.kredit)} <span>Mio. CHF variabel</span></p>
+      <p class="rc-sub">Bankkredit auf SARON-Basis</p>
+      <p class="rc-eff">Zins +1 Prozentpunkt: ${sgn(-m.zinsSens, 2)} Mio. CHF pro Jahr</p>
+      <div class="rc-foot">${levelPill(levelOf(m.zinsPct))}</div>
+    </article>`);
+  cards.push(`<article class="risk-card">
+      <div class="rc-head"><h3>Liquidität</h3><span class="tag mvp">Im MVP</span></div>
+      <p class="rc-fig">${fmt(f.liquid)} <span>Mio. CHF flüssige Mittel</span></p>
+      <p class="rc-sub">Mindestliquidität CHF ${fmt(state.answers.mindestLiq)} Mio.</p>
+      <p class="rc-eff">Anlagefähig: CHF ${fmt(m.excess)} Mio.</p>
+      <div class="rc-foot">${m.excess > 0 ? pill('na', '+', 'Anlagepotenzial') : pill('na', '–', 'Kein Überschuss')}</div>
+    </article>`);
+  const rows = m.stress.map(s => `<tr><td>${s.label}</td><td>${s.sub}</td><td class="num">${sgn(-s.chf, 2)}</td><td class="num">${pct(s.pctv)}</td></tr>`).join('');
+  return `${head('Schritt 2 von 6', 'Risiken', 'Erkannte Risiken und ihre Wirkung auf das Betriebsergebnis, berechnet aus den bestätigten Kennzahlen.')}
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-head"><h2>Belastung des EBIT im Stressfall</h2><span class="ref">in % des EBIT von CHF ${fmt(f.ebit)} Mio.</span></div>
+      <div class="chart-host" data-chart="stress"></div>
+      <details class="tblv"><summary>Werte als Tabelle</summary><div class="tbl-wrap"><table>
+        <thead><tr><th>Szenario</th><th>Wirkung</th><th class="num">CHF Mio.</th><th class="num">% EBIT</th></tr></thead><tbody>${rows}</tbody></table></div></details>
+    </section>
+    <div class="risk-grid">${cards.join('')}</div>
+    <p class="roadmap-note"><span class="tag">Roadmap</span> Rohstoff- und Energiepreise (z.B. Stahl, Strom) aus der Kreditorenbuchhaltung, Zinsabsicherung mit Swaps und Caps.</p>
+  </div>
+  ${nav(1)}`;
+}
+
+/* ---------- Schritt 3: Fragebogen ---------- */
+function preMeta(key, src) {
+  const ok = state.confirmed[key];
+  return `<div class="pre"><span><b>Aus Unterlagen:</b> ${src}</span>${ok ? pill('ok', '✓', 'Bestätigt') : `<button class="btn btn-secondary btn-sm" data-action="confirm" data-key="${key}">Bestätigen</button>`}</div>`;
+}
+function matrix(m) {
+  const k = state.knowledge, c = m.c;
+  const rows = PRODUCTS.filter(p => !p.deposit).map(p => {
+    const key = 'knowledge.' + p.id, pre = c.prefilled[key];
+    if (state.qFilter === 'offen' && !(pre && !state.confirmed[key])) return '';
+    const preHtml = pre ? `<div class="mx-pre"><span>Aus Unterlagen: ${pre}</span>${state.confirmed[key] ? pill('ok', '✓', 'Bestätigt') : `<button class="btn btn-secondary btn-sm" data-action="confirm" data-key="${key}">Bestätigen</button>`}</div>` : '';
+    return `<tr><th scope="row">${p.name}${preHtml}</th>${KLEVELS.map(([v, l]) => `<td class="mx"><input type="radio" name="kn-${p.id}" id="kn-${p.id}-${v}" value="${v}" data-bind="knowledge.${p.id}" ${k[p.id] === v ? 'checked' : ''} aria-label="${p.short}: ${l}"></td>`).join('')}</tr>`;
+  }).join('');
+  if (!rows) return '';
+  return `${m.isPro ? notice('', 'Bei professionellen Kunden werden Kenntnisse und Erfahrungen vermutet. Die Angaben sind freiwillig und verbessern die Beratung.') : ''}
+    <div class="tbl-wrap"><table class="matrix"><thead><tr><th>Produkt</th>${KLEVELS.map(l => `<th class="mx">${l[1]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function qBlock(q, m) {
+  const a = state.answers, pre = m.c.prefilled[q.id], unconf = pre && !state.confirmed[q.id];
+  if (q.type === 'matrix') {
+    const body = matrix(m);
+    if (!body) return '';
+    return `<fieldset class="q" id="q-${q.id}"><legend class="q-text">${q.text}</legend>${body}</fieldset>`;
+  }
+  if (state.qFilter === 'offen' && !unconf) return '';
+  let body;
+  if (q.type === 'number') {
+    body = `<div class="num-field"><input class="input-num" type="number" inputmode="decimal" step="0.1" min="0" id="ans-${q.id}" data-bind="answers.${q.id}" value="${a[q.id]}" aria-label="${QSHORT[q.id]} in CHF Mio."><span>CHF Mio.</span></div>`;
+  } else {
+    const dt = q.type === 'bool' ? 'data-type="bool"' : q.type === 'num' ? 'data-type="num"' : '';
+    body = `<div class="chips">${OPTS[q.id].map(([v, l]) => `<label class="chip"><input type="radio" name="ans-${q.id}" id="ans-${q.id}-${v}" value="${v}" data-bind="answers.${q.id}" ${dt} ${a[q.id] === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`;
+  }
+  const hint = typeof q.hint === 'function' ? q.hint(m) : q.hint;
+  return `<fieldset class="q ${unconf ? 'q-pre' : ''}" id="q-${q.id}"><legend class="q-text">${q.text}</legend>${hint ? `<p class="q-hint">${hint}</p>` : ''}${body}${pre ? preMeta(q.id, pre) : ''}</fieldset>`;
+}
+function viewFragebogen(m) {
+  const visible = QUESTIONS.filter(q => !q.showIf || q.showIf(m));
+  const preCount = Object.keys(m.c.prefilled).length;
+  const sections = SECTIONS.map(s => {
+    const qs = visible.filter(q => q.sec === s.id).map(q => qBlock(q, m)).join('');
+    if (!qs) return '';
+    return `<section class="q-section"><div class="q-section-head"><h2>${s.title}</h2><span class="ref">${s.ref}</span></div>${qs}</section>`;
+  }).join('');
+  const filter = `<div class="filter" role="group" aria-label="Fragen filtern">
+      <button data-action="qfilter" data-val="alle" aria-pressed="${state.qFilter === 'alle'}">Alle Fragen</button>
+      <button data-action="qfilter" data-val="offen" aria-pressed="${state.qFilter === 'offen'}">Zu bestätigen (${m.unconfirmed.length})</button></div>`;
+  return `${head('Schritt 3 von 6', 'Fragebogen', `${visible.length} Fragen zu Segment, Zielen, Risikobereitschaft und Kenntnissen. ${preCount} Antworten sind aus den Unterlagen vorbefüllt und müssen bestätigt werden.`, filter)}
+  <section class="panel">${sections || notice('ok', 'Alle vorbefüllten Antworten sind bestätigt.')}</section>
+  ${nav(2)}`;
+}
+
+/* ---------- Schritt 4: FIDLEG-Prüfung ---------- */
+function viewPruefung(m) {
+  const a = state.answers;
+  const thRows = m.th.map(t => `<tr><td>${t.label}</td><td class="num">CHF ${fmt(t.value)} Mio.</td><td class="num">über CHF ${fmt(t.limit, 0)} Mio.</td><td class="num"><b>${t.hit ? 'Ja' : 'Nein'}</b></td></tr>`).join('');
+  const conseq = m.isPro ? [
+    ['Kenntnisse, Erfahrung und finanzielle Tragbarkeit werden vermutet; Anlageziele werden geprüft', 'Art. 12 FIDLEG'],
+    ['Kein Basisinformationsblatt erforderlich', 'Art. 58 FIDLEG'],
+    ['Verzicht auf Informations- und Dokumentationspflichten möglich', 'Art. 20 FIDLEG'],
+    ['Opting-in als Privatkunde möglich', 'Art. 5 FIDLEG']
+  ] : [
+    ['Eignungsprüfung: finanzielle Verhältnisse, Anlageziele, Kenntnisse und Erfahrungen', 'Art. 12 FIDLEG'],
+    ['Abraten, wenn ein Produkt nicht geeignet ist', 'Art. 14 FIDLEG'],
+    ['Basisinformationsblatt vor Abschluss aushändigen', 'Art. 58 FIDLEG'],
+    ['Beratung dokumentieren, Rechenschaft ablegen', 'Art. 15 und 16 FIDLEG']
+  ];
+  const prodRows = PRODUCTS.map(p => {
+    const e = m.elig[p.id];
+    const kn = p.deposit ? '–' : m.isPro ? 'vermutet' : kLabel(state.knowledge[p.id]);
+    return `<tr><td><strong>${p.short}</strong><div class="small muted">${e.note}${e.ref ? ` · ${e.ref}` : ''}</div></td><td>${p.use}</td><td>${kn}</td><td>${eligPill(e)}</td><td>${e.bib ? 'erforderlich' : '–'}</td></tr>`;
+  }).join('');
+  const factor = list => list.map(x => `<li><span>${x.label}</span><span class="fv">${x.value}</span>${dots(x.score)}</li>`).join('');
+  return `${head('Schritt 4 von 6', 'FIDLEG-Prüfung', 'Segment, Risikoprofil und Eignung werden nach festen Regeln bestimmt. Jede Entscheidung ist begründet und im Audit-Trail festgehalten.')}
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-head"><h2>Kundensegment</h2><span class="ref">Art. 4 und 5 FIDLEG</span></div>
+      <div class="seg-result"><span class="seg-big">${m.segName}</span><span class="muted">${m.isPro ? 'Kenntnisse, Erfahrung und finanzielle Tragbarkeit werden vermutet.' : 'Höchstes Schutzniveau mit vollständiger Eignungsprüfung.'}</span></div>
+      <ol class="decision">
+        <li><span class="d-q">Institutioneller Kunde?</span><span class="d-a">Nein</span><span class="d-why">Kein Finanzintermediär, keine Versicherung, keine Zentralbank · Art. 4 Abs. 4</span></li>
+        <li><span class="d-q">Grosses Unternehmen?</span><span class="d-a">${m.gross ? 'Ja' : 'Nein'}</span><span class="d-why">${m.hits} von 3 Schwellenwerten überschritten, mindestens 2 nötig · Art. 4 Abs. 5</span>
+          <div class="d-tbl tbl-wrap"><table><thead><tr><th>Grösse</th><th class="num">Wert</th><th class="num">Schwelle</th><th class="num">Überschritten</th></tr></thead><tbody>${thRows}</tbody></table></div></li>
+        <li><span class="d-q">Professionelle Tresorerie?</span><span class="d-a">${m.profTreasury ? 'Ja' : 'Nein'}</span><span class="d-why">${optLabel('treasury', a.treasury)} · Art. 4 Abs. 3</span></li>
+        ${m.professionalBase ? `<li><span class="d-q">Opting-in erklärt?</span><span class="d-a">${m.optingIn ? 'Ja' : 'Nein'}</span><span class="d-why">${m.optingIn ? 'Das Unternehmen wird als Privatkunde behandelt' : 'Behandlung als professioneller Kunde'} · Art. 5</span></li>` : ''}
+      </ol>
+      <h3 style="margin:16px 0 10px">Was daraus folgt</h3>
+      <ul class="conseq">${conseq.map(([t, r]) => `<li><span>${t}</span><span class="ref">${r}</span></li>`).join('')}</ul>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Risikoprofil</h2><span class="ref">Art. 12 FIDLEG</span></div>
+      ${m.isPro ? notice('', 'Bei professionellen Kunden wird die finanzielle Tragbarkeit vermutet. Die Analyse dient hier der Strukturierung des Vorschlags.') : ''}
+      <div class="two-col" style="margin-top:${m.isPro ? '14px' : '0'}">
+        <div><div class="factor-head"><h3>Risikofähigkeit</h3><span class="score">${m.capacity}/5</span></div><p class="small muted">Objektiv, aus den Unterlagen</p><ul class="factors">${factor(m.capFactors)}</ul></div>
+        <div><div class="factor-head"><h3>Risikobereitschaft</h3><span class="score">${m.willingness}/5</span></div><p class="small muted">Subjektiv, aus dem Fragebogen</p><ul class="factors">${factor(m.willFactors)}</ul></div>
+      </div>
+      <div class="profile-result"><span>Risikoprofil</span><strong>${m.profile} · ${PROFILES[m.profile]}</strong><span class="small muted">Massgebend ist der tiefere der beiden Werte.</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Eignung der Produkte</h2><span class="ref">Art. 12 und 14 FIDLEG</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Produkt</th><th>Verwendung</th><th>Kenntnisse</th><th>Ergebnis</th><th>Basisinfoblatt</th></tr></thead>
+        <tbody>${prodRows}</tbody></table></div>
+    </section>
+  </div>
+  ${nav(3)}`;
+}
+
+/* ---------- Schritt 5: Vorschlag ---------- */
+function trancheBlock(h) {
+  const rows = h.tranches.map(t => `<tr>
+      <td>${t.label}</td>
+      <td class="num">${fmt(Math.abs(t.amount), 2)}</td>
+      <td class="num"><span class="meter" aria-hidden="true"><span style="width:${t.eff}%"></span></span>${t.eff} %</td>
+      <td class="num">${fmt(Math.abs(t.hedged), 2)}</td>
+      <td class="num">${fmt(t.F, 4)}</td>
+      ${h.collarOn ? `<td class="num">${fmt(t.floor, 4)} – ${fmt(t.cap, 4)}</td>` : ''}
+      <td class="num">${sgn(t.carry, 3)}</td></tr>`).join('');
+  const carryTxt = h.blocked ? 'Keine Absicherung empfohlen, solange die Eignung fehlt.'
+    : h.carry < 0 ? `Die Zinsdifferenz CHF/${h.ccy} kostet gegenüber dem Kassakurs rund <b>CHF ${fmt(-h.carry, 2)} Mio.</b> Das ist der Preis für die Planungssicherheit.`
+      : `Die Zinsdifferenz CHF/${h.ccy} wirkt zu Gunsten des Unternehmens: rund <b>CHF ${fmt(h.carry, 2)} Mio.</b> gegenüber dem Kassakurs.`;
+  return `<div class="tbl-wrap ${h.blocked ? 'blocked' : ''}"><table>
+      <thead><tr><th>Fälligkeit</th><th class="num">Volumen Mio. ${h.ccy}</th><th class="num">Quote</th><th class="num">Abgesichert</th><th class="num">Terminkurs</th>${h.collarOn ? '<th class="num">Collar-Band</th>' : ''}<th class="num">Zinsdifferenz CHF Mio.</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td>Total</td><td class="num">${fmt(Math.abs(h.net), 2)}</td><td class="num">Ø ${fmt(h.avgRatio, 0)} %</td><td class="num">${fmt(h.hedgedFx, 2)}</td><td></td>${h.collarOn ? '<td></td>' : ''}<td class="num">${sgn(h.carry, 3)}</td></tr></tfoot>
+    </table></div>
+    <p class="carry">${carryTxt}</p>`;
+}
+function hedgeCard(h, m) {
+  const action = h.long ? `${h.ccy} auf Termin verkaufen` : `${h.ccy} auf Termin kaufen`;
+  const flow = h.long ? `Nettozufluss ${fmt(h.net)} Mio. ${h.ccy}` : `Nettoabfluss ${fmt(-h.net)} Mio. ${h.ccy}`;
+  const fwdE = m.elig.fwd, colE = m.elig.collar;
+  let banner = '';
+  if (h.blocked) banner = notice('crit', `<b>Devisentermingeschäfte nicht geeignet:</b> Es liegen keine Kenntnisse vor. Vor einer Empfehlung Aufklärung durchführen und Kenntnisse im Fragebogen erfassen (Art. 14 FIDLEG).`);
+  else if (fwdE.status === 'warn') banner = notice('warn', '<b>Nur nach Aufklärung:</b> Erfahrung mit Devisentermingeschäften fehlt. Warnhinweis vor Abschluss dokumentieren.');
+  const collarNote = !h.collarAllowed ? `Nicht geeignet: ${colE.note}` : colE.status === 'warn' ? 'Nur nach Aufklärung, Erfahrung fehlt' : 'Schutz mit Bandbreite, Kurschancen bleiben teilweise offen';
+  const steps = [0, 5, 10, 15].map(v => `<option value="${v}" ${h.step === v ? 'selected' : ''}>${v === 0 ? 'Keine Abstufung' : `${v} Prozentpunkte`}</option>`).join('');
+  return `<article class="hedge" id="hedge-${h.ccy}">
+    <div class="hedge-head">
+      <div><h3>${action}</h3><p>${flow} in 12 Monaten · Kassakurs ${h.ccy}/CHF ${fmt(h.S, 4)}</p></div>
+      <div class="hedge-kpi"><span>Ø Absicherungsquote</span><strong id="avg-${h.ccy}">${h.blocked ? '–' : fmt(h.avgRatio, 0) + ' %'}</strong></div>
+    </div>
+    ${banner}
+    <div class="hedge-controls">
+      <div class="ctl">
+        <div class="ctl-label"><label for="h-${h.ccy}-start">Quote nächste 3 Monate</label><output id="out-${h.ccy}-start" for="h-${h.ccy}-start">${h.start} %</output></div>
+        <input type="range" id="h-${h.ccy}-start" min="0" max="${m.cap}" step="5" value="${h.start}" data-live="hedge.${h.ccy}.start">
+        <small>Höchstens ${m.cap} % gemäss Treasury-Policy${h.limited ? ', Vorschlag wurde begrenzt' : ''}. Mehr als 100 % der Nettoposition wäre Spekulation und ist gesperrt.</small>
+      </div>
+      <div class="ctl">
+        <div class="ctl-label"><label for="h-${h.ccy}-step">Abstufung pro Quartal</label></div>
+        <select id="h-${h.ccy}-step" data-bind="hedge.${h.ccy}.step" data-type="num">${steps}</select>
+        <small>Spätere Quartale weniger absichern, weil die Planzahlen unsicherer sind.</small>
+      </div>
+      <fieldset class="ctl">
+        <legend>Instrumente</legend>
+        <div class="radio-list">
+          <label><input type="radio" name="col-${h.ccy}" id="col-${h.ccy}-no" value="false" data-bind="hedge.${h.ccy}.collar" data-type="bool" ${!h.collarOn ? 'checked' : ''} ${h.blocked ? 'disabled' : ''}><span>Nur Devisentermingeschäfte<small>Fixer Kurs, volle Planungssicherheit</small></span></label>
+          <label class="${h.collarAllowed ? '' : 'is-disabled'}"><input type="radio" name="col-${h.ccy}" id="col-${h.ccy}-yes" value="true" data-bind="hedge.${h.ccy}.collar" data-type="bool" ${h.collarOn ? 'checked' : ''} ${h.collarAllowed ? '' : 'disabled'}><span>70 % Termingeschäfte, 30 % Zero-Cost-Collar<small>${collarNote}</small></span></label>
+        </div>
+      </fieldset>
+    </div>
+    <div id="live-${h.ccy}">${trancheBlock(h)}</div>
+  </article>`;
+}
+function overviewTiles(m) {
+  const active = m.hedges.filter(h => !h.blocked);
+  const vol = active.reduce((s, h) => s + h.hedgedCHF, 0);
+  const carry = active.reduce((s, h) => s + h.carry, 0);
+  return `<div class="tiles">
+    <div class="tile"><span class="tile-label">Abgesichertes Volumen</span><span class="tile-value">CHF ${fmt(vol)} Mio.</span><span class="tile-sub">${active.length ? `${active.map(h => h.ccy).join(' und ')}, über 12 Monate gestaffelt` : 'Keine Absicherung empfohlen'}</span></div>
+    <div class="tile"><span class="tile-label">Zinsdifferenz gegenüber Kassakurs</span><span class="tile-value">CHF ${sgn(carry, 2)} Mio.</span><span class="tile-sub">Kosten bzw. Ertrag der Terminkurse</span></div>
+    <div class="tile"><span class="tile-label">Anlagefähige Liquidität</span><span class="tile-value">CHF ${fmt(m.excess)} Mio.</span><span class="tile-sub">nach Mindestliquidität von CHF ${fmt(state.answers.mindestLiq)} Mio.</span></div>
+  </div>`;
+}
+function scenarioLive(m, h) {
+  const s = state.scenario.shift / 100, e = scenarioEffect(h, s), ebit = state.fin.ebit;
+  const red = Math.abs(e.unhedged) > 1e-6 ? 1 - Math.abs(e.hedged) / Math.abs(e.unhedged) : null;
+  const pts = [-15, -10, -5, 0, 5, 10, 15].map(p => { const r = scenarioEffect(h, p / 100); return `<tr><td>${shiftLabel(p)}</td><td class="num">${sgn(r.unhedged)}</td><td class="num">${sgn(r.hedged)}</td></tr>`; }).join('');
+  return `<div class="tiles">
+      <div class="tile"><span class="tile-label"><i style="background:var(--series-2)"></i>Ohne Absicherung</span><span class="tile-value">CHF ${sgn(e.unhedged)} Mio.</span><span class="tile-sub">${ebit > 0 ? `${pct(Math.abs(e.unhedged) / ebit)} des EBIT` : ''}</span></div>
+      <div class="tile"><span class="tile-label"><i style="background:var(--series-1)"></i>Mit Vorschlag</span><span class="tile-value">CHF ${sgn(e.hedged)} Mio.</span><span class="tile-sub">${ebit > 0 ? `${pct(Math.abs(e.hedged) / ebit)} des EBIT` : ''}</span></div>
+      <div class="tile"><span class="tile-label">Schwankung reduziert um</span><span class="tile-value">${red == null ? '–' : pct(clamp(red, -9, 1))}</span><span class="tile-sub">bei ${h.ccy}/CHF ${shiftLabel(state.scenario.shift)}</span></div>
+    </div>
+    <ul class="legend" style="margin-top:16px"><li><i style="background:var(--series-2)"></i>Ohne Absicherung</li><li><i style="background:var(--series-1)"></i>Mit Vorschlag</li></ul>
+    <div class="chart-host" data-chart="scenario"></div>
+    <details class="tblv"><summary>Werte als Tabelle</summary><div class="tbl-wrap"><table><thead><tr><th>${h.ccy}/CHF</th><th class="num">Ohne Absicherung</th><th class="num">Mit Vorschlag</th></tr></thead><tbody>${pts}</tbody></table></div></details>
+    <p class="chart-note">EBIT-Effekt in CHF Mio. gegenüber dem heutigen Kassakurs. Vereinfachung: Die Kursänderung wirkt sofort auf alle Fälligkeiten. Demo-Annahmen: EUR/CHF 0.9400, USD/CHF 0.8000, Zinsen CHF 0.00 %, EUR 2.00 %, USD 3.75 %.</p>`;
+}
+function scenarioPanel(m) {
+  const h = scenarioHedge(m);
+  if (!h) return `<section class="panel"><h2>Szenario</h2><p class="muted" style="margin-top:8px">Keine Fremdwährungsposition, die eine Absicherung rechtfertigt.</p></section>`;
+  const tabs = m.hedges.map(x => `<button class="tab" role="tab" aria-selected="${x.ccy === h.ccy}" data-action="sc-ccy" data-ccy="${x.ccy}">${x.ccy}/CHF</button>`).join('');
+  return `<section class="panel">
+    <div class="panel-head center"><h2>Szenario: Wechselkurs bewegt sich</h2><div class="tabs" role="tablist" aria-label="Währung wählen">${tabs}</div></div>
+    <div class="ctl sc-ctl"><div class="ctl-label"><label for="sc-shift">Veränderung ${h.ccy}/CHF gegenüber heute</label><output id="out-shift" for="sc-shift">${shiftLabel(state.scenario.shift)}</output></div>
+      <input type="range" id="sc-shift" min="-15" max="15" step="1" value="${state.scenario.shift}" data-live="scenario.shift"></div>
+    <div id="live-scenario">${scenarioLive(m, h)}</div>
+  </section>`;
+}
+function liquidityPanel(m) {
+  const a = state.answers;
+  if (m.excess <= 0) return `<section class="panel"><div class="panel-head"><h2>Anlage der Überschussliquidität</h2></div>${notice('', 'Keine Überschussliquidität: Die flüssigen Mittel liegen nicht über der Mindestliquidität. Es wird keine Anlage empfohlen.')}</section>`;
+  const parts = m.liq.parts.filter(p => p.share > 0);
+  const segs = parts.map(p => `<div class="seg" style="flex-grow:${p.share};background:${p.color}" data-tip="${esc(`<b>${p.p.short}</b><br>${p.share} % · CHF ${fmt(p.amount, 2)} Mio.`)}">${p.share >= 12 ? `${p.share} %` : ''}</div>`).join('');
+  const legend = parts.map(p => `<li><i class="sq" style="background:${p.color}"></i>${p.p.short} <b>CHF ${fmt(p.amount, 2)} Mio.</b></li>`).join('');
+  const rows = parts.map(p => `<tr><td><strong>${p.p.short}</strong></td><td class="num">${p.share} %</td><td class="num">${fmt(p.amount, 2)}</td><td>${eligPill(m.elig[p.id])}</td><td class="small">${m.elig[p.id].note}</td></tr>`).join('');
+  const shiftNote = m.liq.shifted.length ? notice('warn', `${m.liq.shifted.map(id => P[id].short).join(' und ')} umgeschichtet, weil Kenntnisse fehlen (Art. 14 FIDLEG).`) : '';
+  return `<section class="panel">
+    <div class="panel-head"><h2>Anlage der Überschussliquidität</h2><span class="ref">Profil ${PROFILES[m.profile]} · ${optLabel('horizont', a.horizont)}</span></div>
+    <p>Flüssige Mittel CHF ${fmt(state.fin.liquid)} Mio. abzüglich Mindestliquidität CHF ${fmt(a.mindestLiq)} Mio. ergibt <b>CHF ${fmt(m.excess)} Mio.</b> anlagefähig.</p>
+    <div class="segbar" role="img" aria-label="Aufteilung: ${parts.map(p => `${p.p.short} ${p.share} Prozent`).join(', ')}">${segs}</div>
+    <ul class="legend">${legend}</ul>
+    <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Anlage</th><th class="num">Anteil</th><th class="num">CHF Mio.</th><th>Eignung</th><th>Hinweis</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${shiftNote ? `<div style="margin-top:12px">${shiftNote}</div>` : ''}
+  </section>`;
+}
+function reasons(m) {
+  const a = state.answers, c = m.c, out = [];
+  m.hedges.forEach(h => {
+    const flow = h.long ? `Nettozufluss von ${fmt(h.net)} Mio. ${h.ccy}` : `Nettoabfluss von ${fmt(-h.net)} Mio. ${h.ccy}`;
+    const move = h.long ? 'um 10 % fällt' : 'um 10 % steigt';
+    const intro = `<strong>${h.ccy}:</strong> Der erwartete ${flow} belastet das EBIT um CHF ${fmt(h.sens, 2)} Mio. (${pct(h.sensPct)} des EBIT), wenn der ${h.ccy} ${move}.`;
+    if (h.blocked) { out.push(`${intro} Devisentermingeschäfte werden derzeit nicht empfohlen, weil keine Kenntnisse vorliegen. Nach einer dokumentierten Aufklärung ist die Empfehlung neu zu prüfen.`); return; }
+    let t = `${intro} Bei Risikoprofil ${PROFILES[m.profile]} und dem Ziel «${optLabel('ziel', a.ziel)}» empfehlen wir eine gestaffelte Absicherung von ${h.tranches.map(x => x.eff).join(' / ')} % je Quartal (Ø ${fmt(h.avgRatio, 0)} %).`;
+    if (m.isPro) t += ' Beim professionellen Kunden werden Kenntnisse und Erfahrung mit Devisentermingeschäften vermutet.';
+    else if (m.elig.fwd.status === 'ok') t += ` Devisentermingeschäfte sind geeignet, weil Kenntnisse und Erfahrung belegt sind${c.prefilled['knowledge.fwd'] ? ` (${c.prefilled['knowledge.fwd']})` : ''}.`;
+    else t += ' Devisentermingeschäfte nur nach dokumentierter Aufklärung, weil Erfahrung fehlt.';
+    if (h.collarOn) t += ` 30 % laufen über einen Zero-Cost-Collar, damit ein Teil der Kurschancen offen bleibt. Das entspricht der Antwort «${optLabel('opp', a.opp)}».`;
+    else if (!h.collarAllowed) t += ' Devisenoptionen werden nicht empfohlen, weil keine Kenntnisse vorliegen.';
+    t += h.carry < 0 ? ` Die Zinsdifferenz kostet rund CHF ${fmt(-h.carry, 2)} Mio.` : ` Die Zinsdifferenz bringt rund CHF ${fmt(h.carry, 2)} Mio.`;
+    out.push(t);
+  });
+  m.smallFx.forEach(x => out.push(`<strong>${x.ccy}:</strong> Die Nettoposition von ${fmt(Math.abs(x.net))} Mio. ${x.ccy} ist klein. Zu- und Abflüsse gleichen sich weitgehend aus, eine Absicherung ist nicht nötig.`));
+  if (m.excess > 0) {
+    const parts = m.liq.parts.filter(p => p.share > 0).map(p => `${p.share} % ${p.p.short}`).join(', ');
+    out.push(`<strong>Liquidität:</strong> Nach Abzug der Mindestliquidität sind CHF ${fmt(m.excess)} Mio. anlagefähig. Beim Horizont «${optLabel('horizont', a.horizont)}» und Profil ${PROFILES[m.profile]} ${m.profile <= 2 ? 'steht der Kapitalerhalt im Vordergrund' : 'ist eine höhere Beimischung von Obligationen vertretbar'}: ${parts}.${m.liq.shifted.length ? ' Produkte ohne ausreichende Kenntnisse wurden umgeschichtet.' : ''}`);
+  } else out.push('<strong>Liquidität:</strong> Keine Überschussliquidität, daher keine Anlageempfehlung.');
+  return out;
+}
+const reasonsBlock = m => reasons(m).map(r => `<p>${r}</p>`).join('');
+function viewVorschlag(m) {
+  const cards = m.hedges.map(h => hedgeCard(h, m)).join('');
+  return `${head('Schritt 5 von 6', 'Vorschlag', `Absicherung und Anlage für ${m.c.name} · ${m.segName} · Risikoprofil ${PROFILES[m.profile]}.`)}
+  <div class="stack">
+    <div id="live-overview">${overviewTiles(m)}</div>
+    <div class="panel-head" style="margin:6px 0 -6px"><h2>Währungsabsicherung</h2><span class="ref">rollierend über 4 Quartale</span></div>
+    ${cards || `<section class="panel">${notice('', 'Keine Fremdwährungsposition über CHF 0.5 Mio. Eine Absicherung ist nicht nötig.')}</section>`}
+    ${scenarioPanel(m)}
+    ${liquidityPanel(m)}
+    <section class="panel">
+      <div class="panel-head center"><h2>Begründung</h2><span class="ai-tag">KI-Entwurf, vom Berater zu prüfen</span></div>
+      <div class="reasons" id="live-begruendung">${reasonsBlock(m)}</div>
+    </section>
+  </div>
+  ${nav(4)}`;
+}
+
+/* ---------- Schritt 6: Protokoll ---------- */
+function protoSections(m) {
+  const c = m.c, f = state.fin, a = state.answers;
+  const recLines = [];
+  m.hedges.forEach(h => {
+    const action = h.long ? `${h.ccy} auf Termin verkaufen` : `${h.ccy} auf Termin kaufen`;
+    recLines.push(h.blocked ? `${action}: keine Empfehlung, Eignung fehlt`
+      : `${action}: gestaffelt ${h.tranches.map(t => t.eff).join(' / ')} % (Ø ${fmt(h.avgRatio, 0)} %), Volumen ${fmt(h.hedgedFx, 2)} Mio. ${h.ccy}, ${h.collarOn ? '70 % Devisentermingeschäfte und 30 % Zero-Cost-Collar' : 'Devisentermingeschäfte'}`);
+  });
+  if (m.excess > 0) m.liq.parts.filter(p => p.share > 0).forEach(p => recLines.push(`${p.p.short}: CHF ${fmt(p.amount, 2)} Mio. (${p.share} %)`));
+  const notRec = PRODUCTS.filter(p => m.elig[p.id].status === 'crit').map(p => `${p.short}: ${m.elig[p.id].note} (Art. 14 FIDLEG)`);
+  return [
+    { h: 'Kunde und Dienstleistung', rows: [['Kunde', c.name], ['Branche', `${c.branche}, ${c.meta}`], ['Kundensegment', `${m.segName}: ${m.segReason}`], ['Dienstleistung', 'Anlageberatung unter Berücksichtigung des Kundenportfolios'], ['Datum', todayStr()], ['Berater', 'Kundenberater Firmenkunden']] },
+    { h: 'Finanzielle Verhältnisse', rows: [['Umsatz und EBIT', `CHF ${fmt(f.umsatz)} Mio. und CHF ${fmt(f.ebit)} Mio.`], ['Eigenkapitalquote', pct(m.ekQuote)], ['Flüssige Mittel', `CHF ${fmt(f.liquid)} Mio.`], ['Mindestliquidität', `CHF ${fmt(a.mindestLiq)} Mio.`], ['Anlagefähig', `CHF ${fmt(m.excess)} Mio.`]] },
+    { h: 'Ziele und Bedürfnisse', rows: [['Ziel der Absicherung', optLabel('ziel', a.ziel)], ['Maximale Absicherungsquote', `${a.policyMax} % gemäss Treasury-Policy`], ['Anlagehorizont', optLabel('horizont', a.horizont)]] },
+    { h: 'Risikoprofil', rows: [['Risikofähigkeit', `${m.capacity} von 5`], ['Risikobereitschaft', `${m.willingness} von 5`], ['Risikoprofil', `${m.profile} · ${PROFILES[m.profile]}`]] },
+    { h: 'Kenntnisse und Erfahrungen', rows: PRODUCTS.filter(p => !p.deposit).map(p => [p.short, m.isPro ? 'vermutet (professioneller Kunde)' : kLabel(state.knowledge[p.id])]) },
+    { h: 'Empfehlungen', list: recLines.length ? recLines : ['Keine Empfehlung'] },
+    { h: 'Begründung', paras: reasons(m) },
+    { h: 'Nicht empfohlene Produkte', list: notRec.length ? notRec : ['Keine'] },
+    { h: 'Unterlagen und Hinweise', list: m.checklist.map(i => `${state.checklist[i.id] ? 'Erledigt' : 'Offen'}: ${i.text} (${i.ref})`) }
+  ];
+}
+function protoText(m) {
+  let out = `BERATUNGSPROTOKOLL – ANLAGEBERATUNG\n${m.c.name} · ${todayStr()}\n\n`;
+  protoSections(m).forEach((s, i) => {
+    out += `${i + 1}. ${s.h}\n`;
+    (s.rows || []).forEach(([k, v]) => { out += `   ${k}: ${strip(v)}\n`; });
+    (s.list || []).forEach(l => { out += `   – ${strip(l)}\n`; });
+    (s.paras || []).forEach(p => { out += `   ${strip(p)}\n`; });
+    out += '\n';
+  });
+  out += state.approved ? `Freigegeben am ${state.approved.date}, ${state.approved.time}\n` : 'Status: Entwurf, nicht freigegeben\n';
+  return out;
+}
+function viewProtokoll(m) {
+  const checks = m.checklist.map(i => `<li><label><input type="checkbox" id="chk-${i.id}" data-bind="checklist.${i.id}" ${state.checklist[i.id] ? 'checked' : ''}><span>${i.text}<small>${i.ref}</small></span></label></li>`).join('');
+  const blockers = [];
+  if (m.unconfirmed.length) blockers.push(`${m.unconfirmed.length} vorbefüllte ${m.unconfirmed.length === 1 ? 'Antwort' : 'Antworten'} im Fragebogen bestätigen`);
+  if (m.checklistOpen.length) blockers.push(`${m.checklistOpen.length} ${m.checklistOpen.length === 1 ? 'Punkt' : 'Punkte'} der Checkliste erledigen`);
+  const approveRow = state.approved
+    ? `<div class="approve-row">${pill('ok', '✓', `Freigegeben am ${state.approved.date}, ${state.approved.time}`)}<button class="btn btn-ghost btn-sm" data-action="unapprove">Freigabe zurückziehen</button><button class="btn btn-secondary btn-sm" data-action="copy">Protokoll als Text kopieren</button></div>`
+    : `<div class="approve-row"><button class="btn btn-primary" data-action="approve" ${m.canApprove ? '' : 'disabled'}>Vorschlag freigeben</button><button class="btn btn-secondary btn-sm" data-action="copy">Protokoll als Text kopieren</button><span class="small muted">${blockers.length ? `Vor der Freigabe: ${blockers.join(' und ')}.` : 'Bereit zur Freigabe.'}</span></div>`;
+  const secs = protoSections(m).map((s, i) => `<h3>${i + 1}. ${s.h}</h3>
+    ${s.rows ? `<dl>${s.rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}
+    ${s.list ? `<ul>${s.list.map(l => `<li>${l}</li>`).join('')}</ul>` : ''}
+    ${s.paras ? s.paras.map(p => `<p class="doc-p">${p}</p>`).join('') : ''}`).join('');
+  const auditRows = m.audit.map(e => `<li><time>${esc(e.time)}</time><div><span class="who">${esc(e.who)}</span>${esc(e.text)}${e.ref ? ` <span class="aref">· ${esc(e.ref)}</span>` : ''}</div></li>`).join('');
+  return `${head('Schritt 6 von 6', 'Protokoll', 'Das Beratungsprotokoll entsteht automatisch aus Prüfung und Vorschlag. Nach der Checkliste gibt der Berater frei.')}
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-head"><h2>Vor Abschluss</h2><span class="ref">${m.checklist.length} Punkte</span></div>
+      <ul class="checks">${checks}</ul>
+      ${approveRow}
+    </section>
+    <article class="doc" id="doc">
+      <div class="doc-head"><div><p class="eyebrow">Beratungsprotokoll · Art. 15 FIDLEG</p><h2>Anlageberatung ${m.c.name}</h2></div>
+        <div>${state.approved ? pill('ok', '✓', 'Freigegeben') : pill('na', '–', 'Entwurf')}</div></div>
+      ${secs}
+      <div class="sign"><div>Ort, Datum, Kundenberater</div><div>Ort, Datum, für ${m.c.name}</div></div>
+    </article>
+    <section class="panel">
+      <div class="panel-head"><h2>Audit-Trail</h2><span class="ref">${m.audit.length} Einträge</span></div>
+      <ol class="audit">${auditRows}</ol>
+    </section>
+  </div>
+  ${nav(5)}`;
+}
+
+/* ---------- Fallübersicht und Rahmen ---------- */
+function renderSummary(m) {
+  const hedgeRows = m.hedges.map(h => `<div><dt>Absicherung ${h.ccy}</dt><dd>${h.blocked ? 'blockiert' : `Ø ${fmt(h.avgRatio, 0)} %`}</dd></div>`).join('');
+  const todos = m.todos.map(t => `<li><a href="#${t.step}">${t.text}</a></li>`).join('');
+  const audit = m.audit.slice(-5).reverse().map(e => `<li><time>${esc(e.time)}</time><div><span class="who">${esc(e.who)}</span>${esc(e.text)}</div></li>`).join('');
+  $('#summary').innerHTML = `<div class="sum">
+    <div><p class="eyebrow">Fallübersicht</p><h2 class="sum-name">${m.c.name}</h2><p class="sum-meta">${m.c.short} · ${m.c.branche} · ${m.c.meta}</p></div>
+    <dl class="sum-list">
+      <div><dt>Kundensegment</dt><dd><span class="seg-chip ${m.isPro ? 'pro' : ''}">${m.segName}</span></dd></div>
+      <div><dt>Risikoprofil</dt><dd>${m.profile} · ${PROFILES[m.profile]}</dd></div>
+      ${hedgeRows}
+      <div><dt>Anlagefähig</dt><dd>CHF ${fmt(m.excess)} Mio.</dd></div>
+    </dl>
+    <div class="sum-block"><h3>Offene Punkte ${m.todos.length ? `<span class="count">${m.todos.length}</span>` : ''}</h3>
+      ${m.todos.length ? `<ul class="todo-list">${todos}</ul>` : pill('ok', '✓', `Freigegeben ${state.approved ? state.approved.time : ''}`)}</div>
+    <div class="sum-block"><h3>Audit-Trail</h3><ol class="audit">${audit}</ol><p class="sum-note">${m.audit.length} Einträge, vollständig im Protokoll</p></div>
+  </div>`;
+}
+function renderStepper(m) {
+  const idx = STEPS.findIndex(s => s.id === state.step);
+  $('#stepper').innerHTML = STEPS.map((s, i) => {
+    const st = i < idx ? 'done' : i === idx ? 'current' : 'next';
+    const badge = s.id === 'fragebogen' && m.unconfirmed.length ? `<span class="step-badge" aria-label="${m.unconfirmed.length} zu bestätigen">${m.unconfirmed.length}</span>` : '';
+    return `<li><a href="#${s.id}" class="step ${st}" ${i === idx ? 'aria-current="step"' : ''}><span class="step-num">${i + 1}</span><span>${s.label}</span>${badge}</a></li>`;
+  }).join('');
+}
+function renderClientSwitch() {
+  $('#client-switch').innerHTML = Object.entries(CLIENTS).map(([id, c]) =>
+    `<button data-action="client" data-client="${id}" aria-pressed="${state.clientId === id}">${c.name}<small>${c.short}</small></button>`).join('');
+}
+const VIEWS = { unterlagen: viewUnterlagen, risiken: viewRisiken, fragebogen: viewFragebogen, pruefung: viewPruefung, vorschlag: viewVorschlag, protokoll: viewProtokoll };
+
+function render() {
+  const active = document.activeElement, aid = active && active.id;
+  const m = compute();
+  renderClientSwitch();
+  renderStepper(m);
+  $('#view').innerHTML = VIEWS[state.step](m);
+  renderSummary(m);
+  drawCharts(m);
+  if (aid) { const el = document.getElementById(aid); if (el && el !== document.activeElement) el.focus({ preventScroll: true }); }
+}
+
+/* ---------- Charts ---------- */
+function niceTicks(min, max, n = 5) {
+  if (min === max) { max = min + 1; }
+  const raw = (max - min) / (n - 1), mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+  const lo = Math.floor(min / step + 1e-9) * step, hi = Math.ceil(max / step - 1e-9) * step, out = [];
+  for (let v = lo; v <= hi + step / 2; v += step) out.push(Number(v.toFixed(10)));
+  return out;
+}
+const tickDec = ticks => { const st = ticks.length > 1 ? Math.abs(ticks[1] - ticks[0]) : 1; return st >= 1 ? 0 : st >= 0.1 ? (Number.isInteger(Number((st * 10).toFixed(6))) ? 1 : 2) : 2; };
+
+function drawCharts(m) {
+  m = m || compute();
+  document.querySelectorAll('[data-chart]').forEach(host => {
+    if (host.dataset.chart === 'stress') drawStress(host, m);
+    if (host.dataset.chart === 'scenario') { const h = scenarioHedge(m); if (h) drawScenario(host, h); }
+  });
+}
+function barPath(x0, y, x1, h) {
+  const w = x1 - x0, r = Math.min(4, w, h / 2);
+  if (w <= 0.5) return '';
+  return `M${x0},${y} H${x1 - r} Q${x1},${y} ${x1},${y + r} V${y + h - r} Q${x1},${y + h} ${x1 - r},${y + h} H${x0} Z`;
+}
+function drawStress(host, m) {
+  const items = m.stress, W = Math.max(280, host.clientWidth || 600);
+  const rowH = 54, padT = 4, padB = 30, padR = 54, iw = W - padR;
+  const H = padT + items.length * rowH + padB;
+  const maxV = Math.max(1, ...items.map(i => i.pctv));
+  const ticks = niceTicks(0, maxV, 5), top = ticks[ticks.length - 1];
+  const X = v => v / top * iw;
+  let g = '';
+  ticks.forEach(t => {
+    const x = X(t);
+    g += `<line class="${t === 0 ? 'zero-line' : 'grid-line'}" x1="${x}" x2="${x}" y1="${padT}" y2="${padT + items.length * rowH}"></line>`;
+    g += `<text class="tick" x="${x}" y="${H - 10}" text-anchor="${t === 0 ? 'start' : t === top ? 'end' : 'middle'}">${fmt(t * 100, 0)} %</text>`;
+  });
+  items.forEach((it, i) => {
+    const y = padT + i * rowH;
+    g += `<text class="row-label" x="0" y="${y + 17}">${it.label}<tspan class="row-sub"> · CHF ${sgn(-it.chf, 2)} Mio.</tspan></text>`;
+    const by = y + 26, bh = 18, x1 = Math.max(X(it.pctv), 1);
+    g += `<path class="f1" d="${barPath(0, by, x1, bh)}"></path>`;
+    g += `<text class="val-label" x="${x1 + 6}" y="${by + 13}">${pct(it.pctv)}</text>`;
+    g += `<rect class="bar-hit" x="0" y="${y}" width="${W}" height="${rowH}" data-tip="${esc(`<b>${it.label}</b><br>${it.sub}<br>EBIT ${sgn(-it.chf, 2)} Mio. CHF · ${pct(it.pctv)} des EBIT`)}"></rect>`;
+  });
+  host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Belastung des EBIT: ${items.map(i => `${i.label} ${pct(i.pctv)}`).join(', ')}">${g}</svg>`;
+}
+function drawScenario(host, h) {
+  const W = Math.max(280, host.clientWidth || 600), H = 290;
+  const padL = 46, padR = 54, padT = 22, padB = 42, iw = W - padL - padR, ih = H - padT - padB;
+  const pts = [];
+  for (let p = -15; p <= 15; p++) { const e = scenarioEffect(h, p / 100); pts.push({ p, u: e.unhedged, hd: e.hedged }); }
+  const vals = pts.flatMap(d => [d.u, d.hd]).concat([0]);
+  const ticks = niceTicks(Math.min(...vals), Math.max(...vals), 5), y0 = ticks[0], y1 = ticks[ticks.length - 1], dec = tickDec(ticks);
+  const X = p => padL + (p + 15) / 30 * iw, Y = v => padT + (y1 - v) / (y1 - y0) * ih;
+  let g = `<text class="axis-title" x="0" y="12">CHF Mio.</text>`;
+  ticks.forEach(t => {
+    const y = Y(t);
+    g += `<line class="${Math.abs(t) < 1e-9 ? 'zero-line' : 'grid-line'}" x1="${padL}" x2="${padL + iw}" y1="${y}" y2="${y}"></line>`;
+    g += `<text class="tick" x="${padL - 8}" y="${y + 4}" text-anchor="end">${Math.abs(t) < 1e-9 ? '0' : sgn(t, dec)}</text>`;
+  });
+  [-15, -10, -5, 0, 5, 10, 15].forEach(p => { g += `<text class="tick" x="${X(p)}" y="${padT + ih + 18}" text-anchor="middle">${shiftLabel(p)}</text>`; });
+  g += `<text class="axis-title" x="${padL + iw / 2}" y="${H - 4}" text-anchor="middle">Veränderung ${h.ccy}/CHF</text>`;
+  const path = key => pts.map((d, i) => `${i ? 'L' : 'M'}${X(d.p).toFixed(1)},${Y(d[key]).toFixed(1)}`).join('');
+  g += `<path class="ln s2" d="${path('u')}"></path><path class="ln s1" d="${path('hd')}"></path>`;
+  const last = pts[pts.length - 1], yu = Y(last.u), yh = Y(last.hd);
+  g += `<text class="end-label" x="${X(15) + 8}" y="${yu + 4}">${sgn(last.u, 1)}</text>`;
+  if (Math.abs(yu - yh) >= 14) g += `<text class="end-label" x="${X(15) + 8}" y="${yh + 4}">${sgn(last.hd, 1)}</text>`;
+  const sp = state.scenario.shift, cur = pts.find(d => d.p === sp) || pts[15];
+  g += `<line class="marker-line" x1="${X(sp)}" x2="${X(sp)}" y1="${padT}" y2="${padT + ih}"></line>`;
+  g += `<circle class="f2 ring" cx="${X(sp)}" cy="${Y(cur.u)}" r="5"></circle><circle class="f1 ring" cx="${X(sp)}" cy="${Y(cur.hd)}" r="5"></circle>`;
+  g += `<g id="sc-hover" visibility="hidden"><line class="cross-line" id="sc-cl" x1="0" x2="0" y1="${padT}" y2="${padT + ih}"></line><circle class="f2 ring" id="sc-du" r="4.5" cx="0" cy="0"></circle><circle class="f1 ring" id="sc-dh" r="4.5" cx="0" cy="0"></circle></g>`;
+  g += `<rect class="hit" id="sc-hit" x="${padL}" y="${padT}" width="${iw}" height="${ih}"></rect>`;
+  host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="EBIT-Effekt je nach Veränderung ${h.ccy}/CHF, ohne und mit Absicherung">${g}</svg>`;
+  const svg = host.querySelector('svg'), hov = svg.querySelector('#sc-hover');
+  const move = ev => {
+    const r = svg.getBoundingClientRect();
+    const p = clamp(Math.round((ev.clientX - r.left - padL) / iw * 30 - 15), -15, 15), d = pts[p + 15];
+    hov.setAttribute('visibility', 'visible');
+    const x = X(p);
+    svg.querySelector('#sc-cl').setAttribute('x1', x); svg.querySelector('#sc-cl').setAttribute('x2', x);
+    const du = svg.querySelector('#sc-du'), dh = svg.querySelector('#sc-dh');
+    du.setAttribute('cx', x); du.setAttribute('cy', Y(d.u)); dh.setAttribute('cx', x); dh.setAttribute('cy', Y(d.hd));
+    showTip(`<b>${h.ccy}/CHF ${shiftLabel(p)}</b><br><i class="k" style="background:var(--series-2)"></i>Ohne Absicherung <b>${sgn(d.u)}</b><br><i class="k" style="background:var(--series-1)"></i>Mit Vorschlag <b>${sgn(d.hd)}</b><br><span style="opacity:.75">CHF Mio. EBIT-Effekt</span>`, ev.clientX, ev.clientY);
+  };
+  const hit = svg.querySelector('#sc-hit');
+  hit.addEventListener('pointermove', move);
+  hit.addEventListener('pointerdown', move);
+  hit.addEventListener('pointerleave', () => { hov.setAttribute('visibility', 'hidden'); hideTip(); });
+}
+
+/* ---------- Tooltip ---------- */
+const tip = $('#tip');
+function showTip(html, x, y) {
+  tip.innerHTML = html; tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  let left = x + 14, top = y + 14;
+  if (left + r.width > window.innerWidth - 8) left = x - r.width - 14;
+  if (top + r.height > window.innerHeight - 8) top = y - r.height - 14;
+  tip.style.left = Math.max(8, left) + 'px'; tip.style.top = Math.max(8, top) + 'px';
+}
+function hideTip() { tip.hidden = true; }
+document.addEventListener('pointermove', e => {
+  const t = e.target.closest && e.target.closest('[data-tip]');
+  if (t) showTip(t.getAttribute('data-tip'), e.clientX, e.clientY);
+  else if (!(e.target.closest && e.target.closest('#sc-hit'))) hideTip();
+});
+
+/* ---------- Interaktion ---------- */
+function go(step) {
+  if (!VIEWS[step]) return;
+  if (location.hash.slice(1) !== step) location.hash = step;
+  else { state.step = step; render(); }
+}
+window.addEventListener('hashchange', () => {
+  const id = location.hash.slice(1);
+  if (VIEWS[id] && id !== state.step) {
+    state.step = id; hideTip(); render();
+    window.scrollTo(0, 0);
+    $('#view').focus({ preventScroll: true });
+  }
+});
+
+function setPath(path, el) {
+  const parts = path.split('.');
+  let obj = state;
+  for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+  const key = parts[parts.length - 1];
+  let val;
+  if (el.type === 'checkbox') val = el.checked;
+  else if (el.type === 'number') {
+    val = parseFloat(String(el.value).replace(',', '.'));
+    if (!isFinite(val) || val < 0) return null;
+    val = round2(val);
+  } else if (el.dataset.type === 'bool') val = el.value === 'true';
+  else if (el.dataset.type === 'num') val = Number(el.value);
+  else val = el.value;
+  const old = obj[key];
+  obj[key] = val;
+  return { old, val, parts };
+}
+
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.id === 'upload') { if (el.files && el.files[0]) handleFile(el.files[0]); return; }
+  if (el.dataset.live) {
+    const [root, ccy] = el.dataset.live.split('.');
+    if (root === 'hedge') { logEvent(`Absicherungsquote ${ccy} für die nächsten 3 Monate auf ${el.value} % gesetzt`); invalidate(); render(); }
+    return;
+  }
+  const path = el.dataset.bind;
+  if (!path) return;
+  const res = setPath(path, el);
+  if (!res) { render(); return; }
+  if (res.old === res.val) return;
+  const [root, a1, a2] = res.parts;
+  if (root === 'fin') logEvent(`Kennzahl korrigiert: ${FIN_FIELDS.find(f => f[0] === a1)[1]} ${fmt(res.old)} → ${fmt(res.val)} Mio.`);
+  else if (root === 'fx') logEvent(`Fremdwährung korrigiert: ${state.fx[a1].ccy} ${a2 === 'inflow' ? 'Zuflüsse' : 'Abflüsse'} ${fmt(res.old)} → ${fmt(res.val)} Mio.`);
+  else if (root === 'answers') {
+    if (m_prefilled(a1)) state.confirmed[a1] = true;
+    logEvent(`Antwort erfasst: ${QSHORT[a1]}: ${a1 === 'mindestLiq' ? `CHF ${fmt(res.val)} Mio.` : optLabel(a1, res.val)}`);
+  } else if (root === 'knowledge') {
+    if (m_prefilled('knowledge.' + a1)) state.confirmed['knowledge.' + a1] = true;
+    logEvent(`Kenntnisse erfasst: ${P[a1].short}: ${kLabel(res.val)}`);
+  } else if (root === 'hedge') {
+    logEvent(a2 === 'step' ? `Abstufung ${a1}: ${res.val} Prozentpunkte pro Quartal` : `Instrument ${a1}: ${res.val ? 'mit Zero-Cost-Collar' : 'nur Devisentermingeschäfte'}`);
+  } else if (root === 'checklist') {
+    const item = compute().checklist.find(i => i.id === a1);
+    logEvent(`Checkliste ${res.val ? 'erledigt' : 'wieder offen'}: ${item ? item.short : a1}`);
+  }
+  invalidate();
+  setTimeout(render, 0);
+});
+function m_prefilled(key) { return !!CLIENTS[state.clientId].prefilled[key]; }
+
+document.addEventListener('input', e => {
+  const el = e.target, path = el.dataset.live;
+  if (!path) return;
+  const v = Number(el.value);
+  if (path === 'scenario.shift') {
+    state.scenario.shift = v;
+    $('#out-shift').textContent = shiftLabel(v);
+    const m = compute(), h = scenarioHedge(m);
+    if (h) { $('#live-scenario').innerHTML = scenarioLive(m, h); drawCharts(m); }
+    return;
+  }
+  const ccy = path.split('.')[1];
+  state.hedge[ccy].start = v;
+  const m = compute(), h = m.hedges.find(x => x.ccy === ccy);
+  if (!h) return;
+  $(`#out-${ccy}-start`).textContent = `${h.start} %`;
+  $(`#avg-${ccy}`).textContent = h.blocked ? '–' : `${fmt(h.avgRatio, 0)} %`;
+  $(`#live-${ccy}`).innerHTML = trancheBlock(h);
+  $('#live-overview').innerHTML = overviewTiles(m);
+  $('#live-begruendung').innerHTML = reasonsBlock(m);
+  const sh = scenarioHedge(m);
+  if (sh && $('#live-scenario')) $('#live-scenario').innerHTML = scenarioLive(m, sh);
+  drawCharts(m);
+  renderSummary(m);
+});
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-action]');
+  if (!b || b.disabled) return;
+  const act = b.dataset.action;
+  if (act === 'client') { if (b.dataset.client !== state.clientId) { loadClient(b.dataset.client); render(); } }
+  else if (act === 'goto') go(b.dataset.step);
+  else if (act === 'reextract') startExtraction();
+  else if (act === 'confirm') { const k = b.dataset.key; state.confirmed[k] = true; logEvent(`Vorbefüllte Antwort bestätigt: ${QSHORT[k]}`); render(); }
+  else if (act === 'qfilter') { state.qFilter = b.dataset.val; render(); }
+  else if (act === 'sc-ccy') { state.scenario.ccy = b.dataset.ccy; render(); }
+  else if (act === 'approve') {
+    const m = compute();
+    if (m.canApprove) { state.approved = { time: nowHM(), date: todayStr() }; logEvent('Vorschlag und Beratungsprotokoll freigegeben'); render(); }
+  }
+  else if (act === 'unapprove') { state.approved = null; logEvent('Freigabe zurückgezogen'); render(); }
+  else if (act === 'copy') copyProtocol(b);
+});
+
+function copyProtocol(btn) {
+  const text = protoText(compute());
+  const done = ok => { btn.textContent = ok ? 'Kopiert' : 'Text markiert, mit Cmd+C kopieren'; setTimeout(() => { if (btn.isConnected) btn.textContent = 'Protokoll als Text kopieren'; }, 2200); };
+  const fallback = () => {
+    const doc = $('#doc');
+    if (doc) { const r = document.createRange(); r.selectNodeContents(doc); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+    done(false);
+  };
+  try { navigator.clipboard.writeText(text).then(() => done(true), fallback); } catch (err) { fallback(); }
+}
+
+function handleFile(file) {
+  state.file = file.name;
+  logEvent(`Datei hochgeladen: ${file.name}`);
+  invalidate();
+  startExtraction();
+}
+function startExtraction() {
+  const token = ++exToken;
+  state.extracting = true; state.exStage = 0; render();
+  const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 80 : 450;
+  const tick = () => {
+    if (token !== exToken) return;
+    state.exStage += 1;
+    if (state.exStage >= EX_STAGES.length) { state.extracting = false; logEvent(`${state.file} ausgelesen, Werte mit Fundstellen verknüpft`, 'System'); }
+    render();
+    if (state.extracting) setTimeout(tick, delay);
+  };
+  setTimeout(tick, delay);
+}
+
+document.addEventListener('dragover', e => { const dz = e.target.closest && e.target.closest('#dropzone'); if (dz) { e.preventDefault(); dz.classList.add('drag'); } });
+document.addEventListener('dragleave', e => { const dz = e.target.closest && e.target.closest('#dropzone'); if (dz && !dz.contains(e.relatedTarget)) dz.classList.remove('drag'); });
+document.addEventListener('drop', e => {
+  const dz = e.target.closest && e.target.closest('#dropzone');
+  if (!dz) return;
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+let rzFrame = 0, lastW = 0;
+if ('ResizeObserver' in window) {
+  new ResizeObserver(entries => {
+    const w = Math.round(entries[0].contentRect.width);
+    if (w === lastW) return;
+    lastW = w;
+    cancelAnimationFrame(rzFrame);
+    rzFrame = requestAnimationFrame(() => drawCharts());
+  }).observe($('#view'));
+}
+
+/* ---------- Start ---------- */
+loadClient('kmu');
+const initial = location.hash.slice(1);
+if (VIEWS[initial]) state.step = initial;
+render();
+})();
+</script>

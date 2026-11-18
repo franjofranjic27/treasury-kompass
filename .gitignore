@@ -1,0 +1,22 @@
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Dependencies and builds
+node_modules/
+dist/
+build/
+target/
+.venv/
+__pycache__/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+
+# Logs
+*.log
