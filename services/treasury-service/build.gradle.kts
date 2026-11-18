@@ -62,3 +62,8 @@ allOpen {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// Only the executable boot jar is needed (Dockerfile copies exactly one jar).
+tasks.jar {
+    enabled = false
+}

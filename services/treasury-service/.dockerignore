@@ -1,0 +1,11 @@
+.gradle/
+.kotlin/
+build/
+rules/build/
+rules/.gradle/
+src/test/
+rules/src/test/
+.idea/
+*.iml
+.env
+.env.*

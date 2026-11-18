@@ -1,0 +1,87 @@
+spring:
+  application:
+    name: treasury-service
+  profiles:
+    # Lokal ohne SPRING_PROFILES_ACTIVE: Demo-Kunden laden (Architektur 11.1).
+    default: demo
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  datasource:
+    # Passwort nur über SPRING_DATASOURCE_PASSWORD, kein Standardwert.
+    url: jdbc:postgresql://localhost:5432/treasury_kompass?currentSchema=treasury
+    username: treasury_app
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: treasury
+        jdbc:
+          time_zone: UTC
+  flyway:
+    schemas: treasury
+    default-schema: treasury
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+  jackson:
+    default-property-inclusion: always
+    deserialization:
+      # Request-Schemas sind additionalProperties: false (OpenAPI).
+      fail-on-unknown-properties: true
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  paths-to-match: /api/**,/internal/**
+
+treasury:
+  internal-api:
+    # Gemeinsamer Service-Schlüssel (mind. 32 Zeichen), nur aus der Umgebung. Leer: /internal/** lehnt alles ab.
+    service-key: ${TREASURY_INTERNAL_API_KEY:}
+  advisor:
+    id: ${TREASURY_ADVISOR_ID:advisor-demo}
+    name: ${TREASURY_ADVISOR_NAME:Kundenberater Firmenkunden}
+  upload:
+    max-bytes: ${TREASURY_UPLOAD_MAX_BYTES:20971520}
+    max-pages: ${TREASURY_UPLOAD_MAX_PAGES:150}
+  agent:
+    base-url: ${TREASURY_AGENT_BASE_URL:http://localhost:8000}
+    connect-timeout: 2s
+    read-timeout: 5s
+    retry:
+      max-retries: 3
+      initial-delay: 1s
+      multiplier: 2.0
+  # Demo-Annahmen aus docs/regelwerk.md Abschnitt 8 (geplant: SNB-Datenportal).
+  market-data:
+    source: DEMO
+    as-of: 2026-11-18
+    spot-rates:
+      EUR: 0.94
+      USD: 0.80
+    interest-rates:
+      CHF: 0.0
+      EUR: 0.02
+      USD: 0.0375

@@ -1,0 +1,4 @@
+treasury:
+  internal-api:
+    # Test-only key, not a secret.
+    service-key: test-service-key-0123456789abcdef0123456789abcdef
