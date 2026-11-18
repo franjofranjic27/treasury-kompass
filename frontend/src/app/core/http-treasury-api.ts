@@ -1,17 +1,29 @@
-import { Injectable } from '@angular/core';
-import { FIGURE_LABELS } from './catalog';
+import { Injectable, inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
+import { FIGURE_KEYS } from './catalog';
+import { LanguageService } from './i18n/language';
 import {
+  ANSWER_ORIGINS,
   AnswerStatus,
   Assessment,
+  CLIENT_SEGMENTS,
   ChatEvent,
   ClientDetail,
   ClientDocument,
   ClientSummary,
   DocumentStatus,
+  EXPOSURE_DIRECTIONS,
   HedgeSettings,
+  KNOWLEDGE_LEVELS,
+  PRODUCT_CODES,
+  ProductSuitability,
   Question,
+  QuestionType,
   Questionnaire,
-  QuestionType
+  RISK_PROFILE_CODES,
+  SUITABILITY_CODES,
+  toCode,
 } from './models';
 import { ApiError, TreasuryApi } from './treasury-api';
 
@@ -22,17 +34,40 @@ const TERMINAL: readonly DocumentStatus[] = ['EXTRACTED', 'FAILED'];
 
 const obj = (v: unknown): Json => (v !== null && typeof v === 'object' ? (v as Json) : {});
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-const str = (v: unknown, fallback = ''): string => (v === null || v === undefined ? fallback : String(v));
-const num = (v: unknown, fallback = 0): number => (typeof v === 'number' ? v : Number(v ?? fallback) || fallback);
-const optNum = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
+const str = (v: unknown, fallback = ''): string =>
+  v === null || v === undefined ? fallback : String(v);
+const optStr = (v: unknown): string | null =>
+  v === null || v === undefined || v === '' ? null : String(v);
+const num = (v: unknown, fallback = 0): number =>
+  typeof v === 'number' ? v : Number(v ?? fallback) || fallback;
+const optNum = (v: unknown): number | null =>
+  v === null || v === undefined || v === '' ? null : Number(v);
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Screen of the agent-service ChatContext, derived from the route the advisor is on. */
+type ChatScreen = 'START' | 'QUESTIONNAIRE' | 'DASHBOARD' | 'ADVISORY';
+
+function screenOf(url: string): ChatScreen {
+  const path = url.split(/[?#]/)[0];
+  if (/^\/clients\/[^/]+\/profilierung/.test(path)) return 'QUESTIONNAIRE';
+  if (/^\/clients\/[^/]+\/beratung/.test(path)) return 'ADVISORY';
+  if (/^\/clients\/[^/]+/.test(path)) return 'DASHBOARD';
+  return 'START';
+}
 
 /**
  * HTTP client for treasury-service (/api) and agent-service (/agent). DTOs are mapped loosely
  * because the backend contract is still evolving; unknown fields fall back to neutral defaults.
+ * Codes stay codes (the UI translates them), worded texts are passed through as delivered.
  */
 @Injectable()
 export class HttpTreasuryApi extends TreasuryApi {
+  private readonly language = inject(LanguageService);
+  private readonly translate = inject(TranslateService);
+  private readonly router = inject(Router);
+  /** Conversation per client from the `meta` event, so follow-up questions keep their context. */
+  private readonly conversations = new Map<string, string>();
+
   async listClients(query: string): Promise<readonly ClientSummary[]> {
     const params = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
     const body = await this.request(`/api/clients${params}`);
@@ -47,39 +82,50 @@ export class HttpTreasuryApi extends TreasuryApi {
   async getClient(id: string): Promise<ClientDetail> {
     const [client, documents] = await Promise.all([
       this.request(`/api/clients/${id}`),
-      this.request(`/api/clients/${id}/documents`).catch(() => [])
+      this.request(`/api/clients/${id}/documents`).catch(() => []),
     ]);
     const c = obj(client);
     const fin = obj(c['financials'] ?? c['fin']);
     const fx = obj(c['fxFlows'] ?? c['fx']);
     return {
       ...mapSummary(c),
-      figures: Object.entries(FIGURE_LABELS).map(([key, label]) => {
-        const shortKey = key.replace('fin.', '');
-        const raw = fin[shortKey] ?? c[key];
+      figures: FIGURE_KEYS.map((key) => {
+        const raw = fin[key.replace('fin.', '')] ?? c[key];
         const entry = obj(raw);
         return {
           key,
-          label,
           value: typeof raw === 'object' ? optNum(entry['value']) : optNum(raw),
-          source: typeof raw === 'object' ? str(entry['source'] ?? entry['citation'], '') || null : null
+          source:
+            typeof raw === 'object'
+              ? optStr(entry['source'] ?? citationText(entry['citation']))
+              : null,
         };
       }),
       fxFlows: Object.entries(fx).map(([ccy, flow]) => ({
         currency: ccy.toUpperCase(),
         inflow: num(obj(flow)['inflow']),
         outflow: num(obj(flow)['outflow']),
-        source: str(obj(flow)['source'], '') || null
+        source: optStr(obj(flow)['source']),
       })),
-      documents: arr(Array.isArray(documents) ? documents : obj(documents)['content']).map((d) => mapDocument(obj(d))),
-      minimumLiquidity: optNum(obj(c['goals'])['minimumLiquidity'])
+      documents: arr(Array.isArray(documents) ? documents : obj(documents)['content']).map((d) =>
+        mapDocument(obj(d)),
+      ),
+      minimumLiquidity: optNum(obj(c['goals'])['minimumLiquidity']),
     };
   }
 
-  async uploadDocument(clientId: string, file: File, onUpdate: (document: ClientDocument) => void): Promise<void> {
+  async uploadDocument(
+    clientId: string,
+    file: File,
+    onUpdate: (document: ClientDocument) => void,
+  ): Promise<void> {
     const form = new FormData();
     form.append('file', file);
-    const response = await fetch(`/api/clients/${clientId}/documents`, { method: 'POST', body: form });
+    const response = await fetch(`/api/clients/${clientId}/documents`, {
+      method: 'POST',
+      headers: this.languageHeader(),
+      body: form,
+    });
     await ensureOk(response);
     let document = mapDocument(obj(await response.json()));
     onUpdate(document);
@@ -87,7 +133,7 @@ export class HttpTreasuryApi extends TreasuryApi {
       await delay(POLL_MS);
       const list = arr(await this.request(`/api/clients/${clientId}/documents`));
       const match = list.map((d) => mapDocument(obj(d))).find((d) => d.id === document.id);
-      if (!match) throw new ApiError('Dokument nicht mehr vorhanden.', 404);
+      if (!match) throw new ApiError(this.translate.instant('errors.documentGone'), 404);
       document = match;
       onUpdate(document);
     }
@@ -102,9 +148,9 @@ export class HttpTreasuryApi extends TreasuryApi {
           id: str(section['id']),
           title: str(section['title'], str(section['id'])),
           legalBasis: str(section['legalBasis']),
-          questions: arr(section['questions']).map((q) => mapQuestion(obj(q)))
+          questions: arr(section['questions']).map((q) => mapQuestion(obj(q))),
         };
-      })
+      }),
     };
   }
 
@@ -120,7 +166,11 @@ export class HttpTreasuryApi extends TreasuryApi {
     return mapAssessment(obj(await this.request(`/api/clients/${clientId}/assessment`)));
   }
 
-  async setHedgeSettings(clientId: string, currency: string, settings: HedgeSettings): Promise<void> {
+  async setHedgeSettings(
+    clientId: string,
+    currency: string,
+    settings: HedgeSettings,
+  ): Promise<void> {
     await this.request(`/api/clients/${clientId}/hedge-settings/${currency}`, 'PUT', settings);
   }
 
@@ -132,14 +182,29 @@ export class HttpTreasuryApi extends TreasuryApi {
     await this.request(`/api/clients/${clientId}/approval`, 'POST', { assessmentVersion });
   }
 
-  async chat(clientId: string | null, message: string, onEvent: (event: ChatEvent) => void): Promise<void> {
+  async chat(
+    clientId: string | null,
+    message: string,
+    onEvent: (event: ChatEvent) => void,
+  ): Promise<void> {
+    // The agent only answers within one client's documents; clientId is required by the contract.
+    if (!clientId) throw new ApiError(this.translate.instant('chat.noClient'), 400);
     const response = await fetch('/agent/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({ clientId, message, context: { route: location.pathname } })
+      headers: {
+        ...this.languageHeader(),
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({
+        clientId,
+        conversationId: this.conversations.get(clientId) ?? null,
+        message,
+        context: { screen: screenOf(this.router.url) },
+      }),
     });
     await ensureOk(response);
-    if (!response.body) throw new ApiError('Keine Antwort vom Agenten.', 502);
+    if (!response.body) throw new ApiError(this.translate.instant('errors.agentNoResponse'), 502);
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = '';
     for (;;) {
@@ -148,21 +213,106 @@ export class HttpTreasuryApi extends TreasuryApi {
       buffer += value;
       const frames = buffer.split(/\r?\n\r?\n/);
       buffer = frames.pop() ?? '';
-      frames.forEach((frame) => dispatchSseFrame(frame, onEvent));
+      frames.forEach((frame) => this.dispatchSseFrame(clientId, frame, onEvent));
     }
-    if (buffer.trim()) dispatchSseFrame(buffer, onEvent);
+    if (buffer.trim()) this.dispatchSseFrame(clientId, buffer, onEvent);
     onEvent({ type: 'done' });
   }
 
   private async request(url: string, method = 'GET', body?: unknown): Promise<unknown> {
     const response = await fetch(url, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body)
+      headers:
+        body === undefined
+          ? this.languageHeader()
+          : { ...this.languageHeader(), 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
     await ensureOk(response);
     const text = await response.text();
     return text ? JSON.parse(text) : null;
+  }
+
+  /** Lets the backend word rule texts in the UI language; it may ignore the header. */
+  private languageHeader(): Record<string, string> {
+    return { 'Accept-Language': this.language.current() };
+  }
+
+  private dispatchSseFrame(
+    clientId: string,
+    frame: string,
+    onEvent: (event: ChatEvent) => void,
+  ): void {
+    let eventName = 'message';
+    const dataLines: string[] = [];
+    for (const line of frame.split(/\r?\n/)) {
+      if (line.startsWith('event:')) eventName = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+    }
+    const raw = dataLines.join('\n');
+    let data: Json = {};
+    try {
+      data = obj(JSON.parse(raw));
+    } catch {
+      data = { text: raw };
+    }
+    switch (eventName) {
+      case 'meta': {
+        const conversationId = optStr(data['conversationId']);
+        if (conversationId) this.conversations.set(clientId, conversationId);
+        break;
+      }
+      case 'token':
+      case 'message':
+        onEvent({ type: 'token', text: str(data['text'] ?? data['delta'] ?? data['content']) });
+        break;
+      case 'citation':
+        onEvent({
+          type: 'citation',
+          citation: {
+            document: str(
+              data['document'] ?? data['documentName'] ?? data['fileName'] ?? data['title'],
+              this.translate.instant('chat.fallbackDocument'),
+            ),
+            location: str(
+              data['locationLabel'] ??
+                data['location'] ??
+                data['label'] ??
+                (data['page'] !== undefined
+                  ? this.translate.instant('chat.page', { page: str(data['page']) })
+                  : undefined),
+              '–',
+            ),
+          },
+        });
+        break;
+      case 'proposal':
+        onEvent({
+          type: 'proposal',
+          proposal: {
+            title: str(
+              data['title'] ?? data['key'],
+              this.translate.instant('chat.fallbackProposal'),
+            ),
+            detail: str(data['detail'] ?? data['value'] ?? data['rationale']),
+            currency: str(data['currency'], 'EUR'),
+            startRatio: num(data['startRatio'], 0),
+            stepDown: num(data['stepDown'], 0),
+          },
+        });
+        break;
+      case 'error':
+        onEvent({
+          type: 'error',
+          message: str(
+            data['detail'] ?? data['message'] ?? data['text'],
+            this.translate.instant('errors.agentFailed'),
+          ),
+        });
+        break;
+      default:
+        break;
+    }
   }
 }
 
@@ -178,185 +328,179 @@ async function ensureOk(response: Response): Promise<void> {
   throw new ApiError(detail || `HTTP ${response.status}`, response.status);
 }
 
-function dispatchSseFrame(frame: string, onEvent: (event: ChatEvent) => void): void {
-  let eventName = 'message';
-  const dataLines: string[] = [];
-  for (const line of frame.split(/\r?\n/)) {
-    if (line.startsWith('event:')) eventName = line.slice(6).trim();
-    else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
-  }
-  const raw = dataLines.join('\n');
-  let data: Json = {};
-  try {
-    data = obj(JSON.parse(raw));
-  } catch {
-    data = { text: raw };
-  }
-  switch (eventName) {
-    case 'token':
-    case 'message':
-      onEvent({ type: 'token', text: str(data['text'] ?? data['delta'] ?? data['content']) });
-      break;
-    case 'citation':
-      onEvent({
-        type: 'citation',
-        citation: {
-          document: str(data['document'] ?? data['fileName'] ?? data['title'], 'Dokument'),
-          location: data['page'] !== undefined ? `S. ${str(data['page'])}` : str(data['location'] ?? data['label'], '–')
-        }
-      });
-      break;
-    case 'proposal':
-      onEvent({
-        type: 'proposal',
-        proposal: {
-          title: str(data['title'] ?? data['key'], 'Vorschlag'),
-          detail: str(data['detail'] ?? data['value'] ?? data['rationale']),
-          currency: str(data['currency'], 'EUR'),
-          startRatio: num(data['startRatio'], 0),
-          stepDown: num(data['stepDown'], 0)
-        }
-      });
-      break;
-    case 'error':
-      onEvent({ type: 'error', message: str(data['detail'] ?? data['message'] ?? data['text'], 'Fehler im Agenten') });
-      break;
-    default:
-      break;
-  }
+/** «Jahresrechnung_2025.pdf, Bilanz, S. 4» from a Citation DTO, worded by the backend. */
+function citationText(citation: unknown): string | null {
+  const c = obj(citation);
+  const parts = [optStr(c['documentName']), optStr(c['locationLabel'])].filter(
+    (p): p is string => p !== null,
+  );
+  return parts.length ? parts.join(', ') : null;
 }
 
 function mapSummary(c: Json): ClientSummary {
   return {
     id: str(c['id']),
-    name: str(c['name'], 'Unbenannt'),
-    shortLabel: str(c['shortLabel'] ?? c['short'], ''),
-    industry: str(c['industry'] ?? c['branche'], '–'),
-    employees: c['employees'] !== undefined && c['employees'] !== null ? `${str(c['employees'])} Mitarbeitende` : '–',
-    segment: c['segment'] ? segmentLabel(str(obj(c['segment'])['result'] ?? c['segment'])) : null,
-    riskProfile: c['riskProfile'] ? profileLabel(str(c['riskProfile'])) : null,
+    name: str(c['name']),
+    shortLabel: optStr(c['shortLabel'] ?? c['short']),
+    industry: optStr(c['industry'] ?? c['branche']),
+    employees: optNum(c['employeeCount'] ?? c['employees']),
+    segment: toCode(obj(c['segment'])['result'] ?? c['segment'], CLIENT_SEGMENTS),
+    riskProfile: toCode(obj(c['riskProfile'])['code'] ?? c['riskProfile'], RISK_PROFILE_CODES),
     documentCount: num(c['documentCount']),
-    openItems: num(c['openItems'] ?? c['openPoints']),
-    approvalStatus: c['approvalStatus'] === 'APPROVED' ? 'APPROVED' : 'NOT_APPROVED'
+    openItems: num(c['openItemCount'] ?? c['openItems'] ?? c['openPoints']),
+    approvalStatus: c['approvalStatus'] === 'APPROVED' ? 'APPROVED' : 'NOT_APPROVED',
   };
 }
 
 function mapDocument(d: Json): ClientDocument {
   return {
     id: str(d['id']),
-    fileName: str(d['fileName'] ?? d['filename'] ?? d['name'], 'Dokument.pdf'),
-    status: (str(d['status'], 'UPLOADED') as DocumentStatus),
-    pageCount: optNum(d['pageCount'])
+    fileName: str(d['filename'] ?? d['fileName'] ?? d['name']),
+    status: str(d['status'], 'UPLOADED') as DocumentStatus,
+    pageCount: optNum(d['pageCount']),
   };
 }
 
 function mapQuestion(q: Json): Question {
   const answer = obj(q['answer']);
   const value = q['value'] ?? answer['value'];
-  const status = str(q['status'] ?? answer['status'], value === undefined || value === null ? 'MISSING' : 'PROPOSED');
+  const status = str(
+    q['status'] ?? answer['status'],
+    value === undefined || value === null ? 'MISSING' : 'PROPOSED',
+  );
   return {
     key: str(q['key']),
     text: str(q['text'] ?? q['label'], str(q['key'])),
-    hint: q['hint'] ? str(q['hint']) : null,
-    type: (str(q['type'], 'AMOUNT') as QuestionType),
+    hint: optStr(q['hint']),
+    unit: optStr(q['unit']),
+    type: str(q['type'], 'AMOUNT') as QuestionType,
     options: arr(q['options']).map((o) => {
       const option = obj(o);
-      return typeof o === 'object' ? { value: str(option['value']), label: str(option['label'] ?? option['value']) } : { value: str(o), label: str(o) };
+      return typeof o === 'object'
+        ? { value: str(option['value']), label: str(option['label'] ?? option['value']) }
+        : { value: str(o), label: str(o) };
     }),
     value: value === undefined || value === null ? null : str(value),
     status: (['PROPOSED', 'CONFIRMED'].includes(status) ? status : 'MISSING') as AnswerStatus,
-    source: str(q['source'] ?? answer['citation'] ?? answer['source'], '') || null
+    origin: toCode(answer['source'], ANSWER_ORIGINS),
+    source: citationText(answer['citation']) ?? optStr(answer['note'] ?? q['source']),
   };
 }
 
 function mapAssessment(a: Json): Assessment {
   const segment = obj(a['segment']);
-  const capacity = obj(a['capacity']);
-  const willingness = obj(a['willingness']);
+  const profile = obj(a['riskProfile'] ?? a['profile']);
+  const capacity = obj(profile['capacity'] ?? a['capacity']);
+  const willingness = obj(profile['willingness'] ?? a['willingness']);
   const factors = (v: unknown) =>
-    arr(v).map((f) => ({ label: str(obj(f)['label'] ?? obj(f)['name']), value: str(obj(f)['value']), score: num(obj(f)['score']) }));
-  const hedge = obj(a['hedge'] ?? a['hedging']);
+    arr(v).map((f) => {
+      const x = obj(f);
+      return {
+        label: str(x['label'] ?? x['name']),
+        value: str(x['displayValue'] ?? x['answerLabel'] ?? x['value']),
+        score: num(x['score']),
+      };
+    });
+  const hedge = obj(a['hedges'] ?? a['hedge']);
   const liquidity = obj(a['liquidity']);
   const approval = obj(a['approval']);
   return {
     version: num(a['version'] ?? a['assessmentVersion'], 1),
     segment: {
-      label: segmentLabel(str(segment['result'])),
+      code: toCode(segment['result'], CLIENT_SEGMENTS),
       reason: str(segment['reason']),
-      legalBasis: str(segment['legalBasis'], 'Art. 4 und 5 FIDLEG'),
-      thresholdsExceeded: num(segment['thresholdsExceeded'])
+      legalBasis: str(segment['legalBasis']),
+      thresholdsExceeded: num(segment['thresholdsExceeded']),
     },
     capacity: { score: num(capacity['score']), factors: factors(capacity['factors']) },
     willingness: { score: num(willingness['score']), factors: factors(willingness['factors']) },
-    profile: { score: num(obj(a['profile'])['score'] ?? a['profile']), label: profileLabel(str(obj(a['profile'])['label'] ?? a['riskProfile'])) },
-    exposures: arr(obj(a['exposures'])['currencies'] ?? a['exposures']).map((e) => {
+    profile: { score: num(profile['score']), code: toCode(profile['code'], RISK_PROFILE_CODES) },
+    exposures: arr(
+      obj(a['exposures'])['fx'] ?? obj(a['exposures'])['currencies'] ?? a['exposures'],
+    ).map((e) => {
       const x = obj(e);
       return {
         currency: str(x['currency']),
         netPosition: num(x['netPosition']),
         netPositionChf: num(x['netPositionChf']),
+        sensitivityChf: num(x['sensitivityChf']),
         sensitivityPctEbit: num(x['sensitivityPctEbit']),
-        riskLevel: (str(x['riskLevel'], 'LOW') as 'LOW' | 'MEDIUM' | 'HIGH'),
-        direction: str(x['direction']) === 'NET_OUTFLOW' ? 'Nettoabfluss' : 'Nettozufluss'
+        riskLevel: str(x['riskLevel'], 'LOW') as 'LOW' | 'MEDIUM' | 'HIGH',
+        direction: toCode(x['direction'], EXPOSURE_DIRECTIONS) ?? 'NONE',
       };
     }),
-    suitability: arr(a['suitability']).map((s) => {
+    suitability: arr(a['suitability']).flatMap((s): ProductSuitability[] => {
       const x = obj(s);
-      return {
-        product: str(x['productLabel'] ?? x['product']),
-        knowledge: str(x['knowledge'] ?? (x['knowledgePresumed'] ? 'Vermutet (professionell)' : '–')),
-        suitability: (str(x['status'] ?? x['result'], 'NOT_APPLICABLE') as Assessment['suitability'][number]['suitability']),
-        note: x['note'] ? str(x['note']) : null,
-        kidRequired: Boolean(x['kidRequired'])
-      };
+      const product = toCode(x['product'], PRODUCT_CODES);
+      if (!product) return [];
+      return [
+        {
+          product,
+          knowledge: toCode(x['knowledgeLevel'] ?? x['knowledge'], KNOWLEDGE_LEVELS),
+          knowledgePresumed: Boolean(x['knowledgePresumed']),
+          suitability: toCode(x['status'] ?? x['result'], SUITABILITY_CODES) ?? 'NOT_APPLICABLE',
+          note: optStr(x['note']),
+          kidRequired: Boolean(x['kidRequired']),
+        },
+      ];
     }),
-    hedges: arr(hedge['currencies'] ?? a['hedges']).map((h) => {
+    hedges: arr(hedge['proposals'] ?? hedge['currencies'] ?? a['hedges']).map((h) => {
       const x = obj(h);
-      const scenario = obj(x['scenario']);
+      const tranches = arr(x['tranches']);
+      const ratios = arr(x['ratios'] ?? tranches.map((t) => obj(t)['ratio'])).map((r) => num(r));
+      const scenario = scenarioAtMinusTen(x['scenario']);
       return {
         currency: str(x['currency']),
-        action: str(x['hedgeAction'] ?? x['action']),
+        action: str(x['actionLabel'] ?? x['action'] ?? x['hedgeAction']),
         cap: num(hedge['cap'] ?? x['cap']),
-        ratios: arr(x['ratios'] ?? arr(x['tranches']).map((t) => obj(t)['ratio'])).map((r) => num(r)),
+        startRatio: num(x['startRatio'], ratios[0] ?? 0),
+        stepDown: num(x['stepDown'], ratios.length > 1 ? ratios[0] - ratios[1] : 0),
+        ratios,
         averageRatio: num(x['averageRatio']),
         hedgedAmountFx: num(x['hedgedAmountFx']),
+        hedgedAmountChf: num(x['hedgedAmountChf']),
         carryChf: num(x['carryChf']),
         limitedByPolicy: Boolean(x['limitedByPolicy']),
         collarShare: x['collarEnabled'] ? num(x['collarShare']) : null,
         scenarioUnhedgedChf: optNum(scenario['unhedgedChf']),
-        scenarioHedgedChf: optNum(scenario['hedgedChf'])
+        scenarioHedgedChf: optNum(scenario['hedgedChf']),
       };
     }),
     liquidity: {
-      excess: num(liquidity['excess']),
-      parts: arr(liquidity['parts'] ?? liquidity['allocation']).map((p) => ({
-        product: str(obj(p)['productLabel'] ?? obj(p)['product']),
-        share: num(obj(p)['share']),
-        amount: num(obj(p)['amount'])
-      }))
+      excess: num(liquidity['excessLiquidity'] ?? liquidity['excess']),
+      parts: arr(liquidity['parts'] ?? liquidity['allocation']).flatMap((p) => {
+        const x = obj(p);
+        const product = toCode(x['product'], PRODUCT_CODES);
+        if (!product) return [];
+        return [
+          {
+            product,
+            share: num(x['sharePct'] ?? x['share']),
+            amount: num(x['amountChf'] ?? x['amount']),
+            suitability:
+              toCode(x['suitabilityStatus'] ?? x['suitability'], SUITABILITY_CODES) ??
+              'NOT_APPLICABLE',
+          },
+        ];
+      }),
     },
     checklist: arr(a['checklist']).map((i) => ({
       id: str(obj(i)['id']),
       text: str(obj(i)['text']),
       legalBasis: str(obj(i)['legalBasis'] ?? obj(i)['ref']),
-      done: Boolean(obj(i)['done'])
+      done: Boolean(obj(i)['done']),
     })),
-    unconfirmedAnswers: num(a['unconfirmedAnswers'] ?? arr(approval['blockers']).filter((b) => obj(b)['type'] === 'UNCONFIRMED_ANSWER').length),
-    approvalStatus: str(approval['status'] ?? a['approvalStatus']) === 'APPROVED' ? 'APPROVED' : 'NOT_APPROVED'
+    unconfirmedAnswers: num(
+      a['unconfirmedAnswers'] ??
+        arr(approval['blockers']).filter((b) => obj(b)['type'] === 'UNCONFIRMED_ANSWER').length,
+    ),
+    approvalStatus:
+      str(approval['status'] ?? a['approvalStatus']) === 'APPROVED' ? 'APPROVED' : 'NOT_APPROVED',
   };
 }
 
-function segmentLabel(code: string): string {
-  return code === 'PROFESSIONAL' ? 'Professioneller Kunde' : code === 'RETAIL' ? 'Privatkunde' : code === 'INSTITUTIONAL' ? 'Institutioneller Kunde' : code || '–';
-}
-
-function profileLabel(code: string): string {
-  const labels: Record<string, string> = {
-    SECURITY: 'Sicherheit',
-    CONSERVATIVE: 'Konservativ',
-    BALANCED: 'Ausgewogen',
-    GROWTH: 'Wachstum',
-    DYNAMIC: 'Dynamisch'
-  };
-  return labels[code] ?? (code || '–');
+/** The contract delivers the scenario as points from −15 % to +15 %; the UI shows the −10 % case. */
+function scenarioAtMinusTen(scenario: unknown): Json {
+  if (!Array.isArray(scenario)) return obj(scenario);
+  return obj(scenario.find((point) => num(obj(point)['shiftPct'], 0) === -10));
 }

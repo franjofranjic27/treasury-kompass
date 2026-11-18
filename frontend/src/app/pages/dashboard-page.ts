@@ -1,160 +1,416 @@
 import { Component, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { ChfPipe, MioPipe, PctPipe } from '../core/format';
-import { Assessment, ClientDetail } from '../core/models';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { ChfPipe, MioPipe, NumPipe, PctPipe } from '../core/format';
+import { Assessment, ClientDetail, Exposure, FxFlow, KeyFigure } from '../core/models';
 import { RefreshBus } from '../core/refresh-bus';
 import { TreasuryApi } from '../core/treasury-api';
-import { DOCUMENT_STATUS_LABEL, RISK_LABEL, SUITABILITY_LABEL, errorText } from './labels';
+import { Badge } from '../shared/badge';
+import { CaseNav } from '../shared/case-nav';
+import { Icon } from '../shared/icon';
+import { FactorList } from '../shared/score';
+import { DOCUMENT_TONE, RISK_TONE, SUITABILITY_TONE, errorText, plural } from './labels';
+
+interface CurrencyBlock {
+  readonly flow: FxFlow;
+  readonly exposure: Exposure | null;
+}
 
 @Component({
   selector: 'app-dashboard-page',
-  imports: [RouterLink, MioPipe, PctPipe, ChfPipe],
+  imports: [
+    RouterLink,
+    TranslatePipe,
+    MioPipe,
+    NumPipe,
+    PctPipe,
+    ChfPipe,
+    Badge,
+    CaseNav,
+    Icon,
+    FactorList,
+  ],
   template: `
+    <app-case-nav [clientId]="id()" />
     @if (client(); as c) {
-      <div class="row between">
-        <div>
+      <div class="page-head">
+        <div class="page-title">
+          <span class="eyebrow">
+            {{ 'dashboard.eyebrow' | translate }}
+            @if (c.shortLabel) {
+              · {{ c.shortLabel }}
+            }
+          </span>
           <h1>{{ c.name }}</h1>
-          <p class="muted">{{ c.shortLabel }} · {{ c.industry }} · {{ c.employees }}</p>
+          <p class="lead">
+            {{ c.industry ?? ('common.dash' | translate) }}
+            @if (c.employees !== null) {
+              · {{ plural('client.employees', c.employees) | translate: { count: c.employees } }}
+            }
+          </p>
         </div>
-        <div class="row">
-          <a class="btn btn-secondary" [routerLink]="['/clients', c.id, 'profilierung']">Profilierung</a>
-          <a class="btn btn-primary" [routerLink]="['/clients', c.id, 'beratung']">Zur Beratung</a>
+        <div class="actions">
+          <a class="btn btn-secondary" [routerLink]="['/clients', c.id, 'profilierung']">{{
+            'dashboard.editProfiling' | translate
+          }}</a>
+          <a class="btn btn-primary" [routerLink]="['/clients', c.id, 'beratung']"
+            >{{ 'dashboard.toAdvisory' | translate }}<app-icon name="chevron-right"
+          /></a>
         </div>
       </div>
-      <div class="grid-2">
-        <div class="stack">
-          <section class="card">
-            <h2>Stammdaten</h2>
-            <dl class="kv">
-              <dt>Firma</dt><dd>{{ c.name }}</dd>
-              <dt>Branche</dt><dd>{{ c.industry }}</dd>
-              <dt>Grösse</dt><dd>{{ c.employees }}</dd>
-              <dt>Freigabe</dt><dd>{{ c.approvalStatus === 'APPROVED' ? 'Freigegeben' : 'Nicht freigegeben' }}</dd>
+
+      <div class="columns">
+        <div class="column">
+          <h2>{{ 'dashboard.clientInfo' | translate }}</h2>
+
+          <section class="card" aria-labelledby="master-title">
+            <h3 id="master-title">{{ 'dashboard.masterData' | translate }}</h3>
+            <dl class="facts">
+              <div>
+                <dt>{{ 'dashboard.industry' | translate }}</dt>
+                <dd>{{ c.industry ?? ('common.dash' | translate) }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'dashboard.employees' | translate }}</dt>
+                <dd>{{ c.employees ?? ('common.dash' | translate) }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'dashboard.clientType' | translate }}</dt>
+                <dd>{{ c.shortLabel ?? ('common.dash' | translate) }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'common.approval' | translate }}</dt>
+                <dd>{{ 'approval.' + c.approvalStatus | translate }}</dd>
+              </div>
             </dl>
           </section>
-          <section class="card">
-            <h2>Kennzahlen</h2>
-            <table class="table">
-              <tbody>
-                @for (f of c.figures; track f.key) {
-                  <tr><td>{{ f.label }}</td><td class="num">CHF {{ f.value | mio }}</td><td class="src">{{ f.source ?? '–' }}</td></tr>
-                }
-              </tbody>
-            </table>
-          </section>
-          <section class="card">
-            <h2>FX-Flüsse, nächste 12 Monate</h2>
-            <table class="table">
-              <thead><tr><th>Währung</th><th class="num">Zuflüsse</th><th class="num">Abflüsse</th><th>Fundstelle</th></tr></thead>
-              <tbody>
-                @for (fx of c.fxFlows; track fx.currency) {
-                  <tr><td>{{ fx.currency }}</td><td class="num">{{ fx.inflow | mio }}</td><td class="num">{{ fx.outflow | mio }}</td><td class="src">{{ fx.source ?? '–' }}</td></tr>
-                } @empty {
-                  <tr><td colspan="4" class="muted">Keine Fremdwährungsflüsse erfasst.</td></tr>
-                }
-              </tbody>
-            </table>
-          </section>
-          @if (assessment(); as a) {
-            <section class="card">
-              <h2>Nettopositionen</h2>
+
+          <section class="card" aria-labelledby="figures-title">
+            <div class="card-title">
+              <h3 id="figures-title">{{ 'dashboard.keyFigures' | translate }}</h3>
+              <span class="meta">{{ 'dashboard.keyFiguresNote' | translate }}</span>
+            </div>
+            <div class="table-wrap">
               <table class="table">
-                <thead><tr><th>Währung</th><th class="num">Netto</th><th class="num">in CHF</th><th class="num">% EBIT bei −10 %</th><th></th></tr></thead>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'dashboard.keyFigure' | translate }}</th>
+                    <th scope="col" class="num">{{ 'dashboard.value' | translate }}</th>
+                    <th scope="col">{{ 'common.citation' | translate }}</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  @for (e of a.exposures; track e.currency) {
+                  @for (f of c.figures; track f.key) {
                     <tr>
-                      <td>{{ e.currency }} <span class="muted small">{{ e.direction }}</span></td>
-                      <td class="num">{{ e.netPosition | mio }}</td>
-                      <td class="num">{{ e.netPositionChf | chf }}</td>
-                      <td class="num">{{ e.sensitivityPctEbit | pct: true : 1 }}</td>
-                      <td><span class="pill" [class]="riskLabel[e.riskLevel].css">{{ riskLabel[e.riskLevel].text }}</span></td>
+                      <td>{{ 'figure.' + f.key | translate }}</td>
+                      <td class="num strong">{{ f.value | num: 1 }}</td>
+                      <td class="src">{{ f.source ?? ('common.dash' | translate) }}</td>
                     </tr>
                   }
                 </tbody>
               </table>
-            </section>
-            <section class="card">
-              <h2>Liquidität</h2>
-              <dl class="kv">
-                <dt>Flüssige Mittel</dt><dd>{{ cash() | chf }}</dd>
-                <dt>Mindestliquidität</dt><dd>{{ c.minimumLiquidity | chf }}</dd>
-                <dt>Überschussliquidität</dt><dd><strong>{{ a.liquidity.excess | chf }}</strong></dd>
-              </dl>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="fx-title">
+            <div class="card-title">
+              <h3 id="fx-title">{{ 'dashboard.fxTitle' | translate }}</h3>
+              <span class="meta">{{ 'dashboard.fxNote' | translate }}</span>
+            </div>
+            @for (block of currencyBlocks(); track block.flow.currency) {
+              @let fx = block.flow;
+              @let e = block.exposure;
+              <div class="currency-block">
+                <div class="currency-head">
+                  <span class="currency-code">{{ fx.currency }}</span>
+                  @if (e) {
+                    <app-badge [tone]="riskTone[e.riskLevel]">{{
+                      'risk.' + e.riskLevel | translate
+                    }}</app-badge>
+                  }
+                </div>
+                <dl class="facts">
+                  <div>
+                    <dt>{{ 'dashboard.inOut' | translate }}</dt>
+                    <dd>{{ fx.currency }} {{ fx.inflow | mio }} · {{ fx.outflow | mio }}</dd>
+                  </div>
+                  @if (e) {
+                    <div>
+                      <dt>{{ 'direction.' + e.direction | translate }}</dt>
+                      <dd class="strong">
+                        {{ fx.currency }} {{ e.netPosition | mio: 1 : true }} (CHF
+                        {{ e.netPositionChf | mio: 2 }})
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>
+                        {{
+                          (e.direction === 'NET_OUTFLOW'
+                            ? 'dashboard.shockUp'
+                            : 'dashboard.shockDown'
+                          ) | translate: { currency: fx.currency }
+                        }}
+                      </dt>
+                      <dd class="strong">
+                        {{
+                          'dashboard.ebitImpact'
+                            | translate
+                              : {
+                                  amount: (e.sensitivityChf | mio: 2),
+                                  pct: (e.sensitivityPctEbit | pct),
+                                }
+                        }}
+                      </dd>
+                    </div>
+                  }
+                  <div>
+                    <dt>{{ 'common.citation' | translate }}</dt>
+                    <dd>{{ fx.source ?? ('common.dash' | translate) }}</dd>
+                  </div>
+                </dl>
+              </div>
+            } @empty {
+              <p class="meta-lg">{{ 'dashboard.noFx' | translate }}</p>
+            }
+            <p class="meta">{{ 'dashboard.riskThresholds' | translate }}</p>
+          </section>
+
+          @if (assessment(); as a) {
+            <section class="card" aria-labelledby="liq-title">
+              <h3 id="liq-title">{{ 'dashboard.liquidityTitle' | translate }}</h3>
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{{ 'dashboard.position' | translate }}</th>
+                      <th scope="col" class="num">CHF</th>
+                      <th scope="col">{{ 'dashboard.origin' | translate }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{{ 'figure.fin.cash' | translate }}</td>
+                      <td class="num strong">{{ figure('fin.cash')?.value | chf }}</td>
+                      <td class="src">
+                        {{ figure('fin.cash')?.source ?? ('common.dash' | translate) }}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>{{ 'dashboard.minimumLiquidity' | translate }}</td>
+                      <td class="num strong">{{ c.minimumLiquidity | chf }}</td>
+                      <td class="src">{{ 'dashboard.minimumLiquiditySource' | translate }}</td>
+                    </tr>
+                    <tr>
+                      <td>{{ 'dashboard.investable' | translate }}</td>
+                      <td class="num strong">{{ a.liquidity.excess | chf }}</td>
+                      <td class="src">{{ 'dashboard.investableRule' | translate }}</td>
+                    </tr>
+                    <tr>
+                      <td>{{ 'figure.fin.floatingRateDebt' | translate }}</td>
+                      <td class="num strong">{{ figure('fin.floatingRateDebt')?.value | chf }}</td>
+                      <td class="src">
+                        {{ figure('fin.floatingRateDebt')?.source ?? ('common.dash' | translate) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </section>
           }
-          <section class="card">
-            <h2>Dokumente</h2>
-            <ul class="plain">
+
+          <section class="card" aria-labelledby="doc-title">
+            <h3 id="doc-title">{{ 'start.documents' | translate }}</h3>
+            <ul class="doc-status-list">
               @for (d of c.documents; track d.id) {
-                <li class="row between"><span>{{ d.fileName }}</span><span class="pill" [class.ok]="d.status === 'EXTRACTED'">{{ docStatus[d.status] }}</span></li>
+                <li>
+                  <span class="file-name">{{ d.fileName }}</span>
+                  <app-badge [tone]="documentTone[d.status]">{{
+                    'documentStatus.' + d.status | translate
+                  }}</app-badge>
+                </li>
               } @empty {
-                <li class="muted">Keine Dokumente. <a routerLink="/">Unterlagen hochladen</a></li>
+                <li class="meta-lg">{{ 'start.noDocumentsYet' | translate }}</li>
               }
             </ul>
+            <a class="link-action" routerLink="/" [queryParams]="{ client: c.id }">{{
+              'dashboard.manageDocuments' | translate
+            }}</a>
           </section>
         </div>
 
-        <div class="stack">
+        <div class="column">
+          <h2>{{ 'dashboard.profileTitle' | translate }}</h2>
           @if (assessment(); as a) {
-            <section class="card">
-              <div class="row between"><h2>FIDLEG-Risikoprofil</h2>
-                <span class="pill" [class.ok]="a.approvalStatus === 'APPROVED'">{{ a.approvalStatus === 'APPROVED' ? 'Freigegeben' : a.unconfirmedAnswers + ' Antworten offen' }}</span>
+            <section class="panel" aria-labelledby="status-title">
+              <h3 id="status-title">{{ 'dashboard.statusTitle' | translate }}</h3>
+              <dl class="facts facts-stacked">
+                <div>
+                  <dt>{{ 'dashboard.status' | translate }}</dt>
+                  <dd>
+                    @if (a.approvalStatus === 'APPROVED') {
+                      <app-badge tone="ok">{{ 'clientStatus.APPROVED' | translate }}</app-badge>
+                    } @else {
+                      <app-badge tone="pending">{{
+                        'clientStatus.IN_PROGRESS' | translate
+                      }}</app-badge>
+                    }
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ 'dashboard.openProposals' | translate }}</dt>
+                  <dd class="inline-actions">
+                    @if (a.unconfirmedAnswers) {
+                      <b>{{
+                        plural('dashboard.toConfirm', a.unconfirmedAnswers)
+                          | translate: { count: a.unconfirmedAnswers }
+                      }}</b>
+                      <a [routerLink]="['/clients', c.id, 'profilierung']">{{
+                        'common.confirm' | translate
+                      }}</a>
+                    } @else {
+                      <b>{{ 'dashboard.noneOpen' | translate }}</b>
+                    }
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ 'dashboard.checklist' | translate }}</dt>
+                  <dd class="strong">
+                    {{ 'common.xOfY' | translate: { x: checklistDone(a), y: a.checklist.length } }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ 'common.approval' | translate }}</dt>
+                  <dd class="strong">{{ 'approval.' + a.approvalStatus | translate }}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="card" aria-labelledby="seg-title">
+              <div class="card-head-row">
+                <h3 id="seg-title">{{ 'common.clientSegment' | translate }}</h3>
+                <span class="tag-rule">{{ 'common.ruleEngine' | translate }}</span>
               </div>
-              <div class="profile-hero">
-                <span class="score">{{ a.profile.score }}</span>
-                <div><strong>{{ a.profile.label }}</strong><p class="muted small">Risikoprofil = min(Fähigkeit, Bereitschaft)</p></div>
+              <p class="rule-result">
+                {{
+                  a.segment.code
+                    ? ('segment.' + a.segment.code | translate)
+                    : ('common.dash' | translate)
+                }}
+              </p>
+              <p class="body-sm">{{ a.segment.reason }}</p>
+              <p class="meta">
+                {{ 'common.legalBasis' | translate: { basis: a.segment.legalBasis } }} ·
+                {{ 'dashboard.thresholds' | translate: { count: a.segment.thresholdsExceeded } }}
+              </p>
+            </section>
+
+            <section class="card" aria-labelledby="rp-title">
+              <div class="card-head-row">
+                <h3 id="rp-title">{{ 'dashboard.riskProfile' | translate }}</h3>
+                <span class="tag-rule">{{ 'common.ruleEngine' | translate }}</span>
+              </div>
+              <p class="rule-result">
+                {{ a.profile.score }} ·
+                {{
+                  a.profile.code
+                    ? ('riskProfile.' + a.profile.code | translate)
+                    : ('common.dash' | translate)
+                }}
+              </p>
+              <p class="body-sm">{{ 'dashboard.profileRule' | translate }}</p>
+              <div class="score-block">
+                <div class="score-head">
+                  <span class="strong">{{ 'profile.capacity' | translate }}</span>
+                  <b class="score-value">{{ a.capacity.score }}/5</b>
+                </div>
+                <span class="meta">{{ 'profile.objective' | translate }}</span>
+                <app-factor-list [factors]="a.capacity.factors" />
+              </div>
+              <div class="score-block">
+                <div class="score-head">
+                  <span class="strong">{{ 'profile.willingness' | translate }}</span>
+                  <b class="score-value">{{ a.willingness.score }}/5</b>
+                </div>
+                <span class="meta">{{ 'profile.subjective' | translate }}</span>
+                <app-factor-list [factors]="a.willingness.factors" />
               </div>
             </section>
-            <section class="card">
-              <h2>Kundensegment</h2>
-              <p><strong>{{ a.segment.label }}</strong></p>
-              <p class="small">{{ a.segment.reason }}</p>
-              <p class="muted small">Rechtsgrundlage: {{ a.segment.legalBasis }} · {{ a.segment.thresholdsExceeded }} von 3 Schwellenwerten</p>
-            </section>
-            <section class="card">
-              <div class="row between"><h2>Risikofähigkeit</h2><span class="score-sm">{{ a.capacity.score }}</span></div>
-              <table class="table"><tbody>
-                @for (f of a.capacity.factors; track f.label) { <tr><td>{{ f.label }}</td><td>{{ f.value }}</td><td class="num">{{ f.score }}</td></tr> }
-              </tbody></table>
-            </section>
-            <section class="card">
-              <div class="row between"><h2>Risikobereitschaft</h2><span class="score-sm">{{ a.willingness.score }}</span></div>
-              <table class="table"><tbody>
-                @for (f of a.willingness.factors; track f.label) { <tr><td>{{ f.label }}</td><td>{{ f.value }}</td><td class="num">{{ f.score }}</td></tr> }
-              </tbody></table>
-            </section>
-            <section class="card">
-              <h2>Kenntnisse und Eignung</h2>
-              <p class="muted small">Art. 12 und 14 FIDLEG</p>
-              <table class="table"><tbody>
-                @for (s of a.suitability; track s.product) {
-                  <tr>
-                    <td>{{ s.product }}@if (s.kidRequired) { <span class="tag">BIB</span> }</td>
-                    <td class="small">{{ s.knowledge }}</td>
-                    <td><span class="pill" [class]="suitabilityLabel[s.suitability].css">{{ suitabilityLabel[s.suitability].text }}</span></td>
-                  </tr>
-                }
-              </tbody></table>
+
+            <section class="card" aria-labelledby="kn-title">
+              <div class="card-head-row">
+                <h3 id="kn-title">{{ 'dashboard.knowledgeTitle' | translate }}</h3>
+                <span class="meta-lg">{{ 'dashboard.knowledgeBasis' | translate }}</span>
+              </div>
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{{ 'questionnaire.productClass' | translate }}</th>
+                      <th scope="col">{{ 'dashboard.knowledge' | translate }}</th>
+                      <th scope="col">{{ 'common.suitability' | translate }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (s of a.suitability; track s.product) {
+                      <tr>
+                        <th scope="row" class="row-head">
+                          {{ 'product.' + s.product | translate }}
+                          @if (s.kidRequired) {
+                            <span class="meta block">{{ 'common.kidRequired' | translate }}</span>
+                          }
+                        </th>
+                        <td>
+                          {{
+                            s.knowledgePresumed
+                              ? ('knowledge.presumed' | translate)
+                              : s.knowledge
+                                ? ('knowledge.' + s.knowledge | translate)
+                                : ('common.dash' | translate)
+                          }}
+                        </td>
+                        <td>
+                          <span class="cell-stack">
+                            <app-badge [tone]="suitabilityTone[s.suitability]">{{
+                              'suitability.' + s.suitability | translate
+                            }}</app-badge>
+                            @if (s.note) {
+                              <span class="meta">{{ s.note }}</span>
+                            }
+                          </span>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             </section>
           } @else {
-            <section class="card"><h2>FIDLEG-Risikoprofil</h2><p class="muted">{{ assessmentError() ?? 'Wird geladen …' }}</p></section>
+            <section class="card">
+              <p class="meta-lg" [attr.role]="assessmentError() ? null : 'status'">
+                {{ assessmentError() ?? ('common.loading' | translate) }}
+              </p>
+            </section>
           }
         </div>
       </div>
     } @else {
-      <p [class.error]="error()">{{ error() ?? 'Kunde wird geladen …' }}</p>
+      <p [class.error]="error()" [attr.role]="error() ? 'alert' : 'status'">
+        {{ error() ?? ('dashboard.loading' | translate) }}
+      </p>
     }
-  `
+  `,
 })
 export class DashboardPage {
   readonly id = input.required<string>();
 
   private readonly api = inject(TreasuryApi);
   private readonly refresh = inject(RefreshBus);
+  private readonly translate = inject(TranslateService);
 
-  protected readonly docStatus = DOCUMENT_STATUS_LABEL;
-  protected readonly riskLabel = RISK_LABEL;
-  protected readonly suitabilityLabel = SUITABILITY_LABEL;
+  protected readonly documentTone = DOCUMENT_TONE;
+  protected readonly riskTone = RISK_TONE;
+  protected readonly suitabilityTone = SUITABILITY_TONE;
+  protected readonly plural = plural;
   protected readonly client = signal<ClientDetail | null>(null);
   protected readonly assessment = signal<Assessment | null>(null);
   protected readonly error = signal<string | null>(null);
@@ -167,15 +423,28 @@ export class DashboardPage {
     });
   }
 
-  protected cash(): number | null {
-    return this.client()?.figures.find((f) => f.key === 'fin.cash')?.value ?? null;
+  protected figure(key: string): KeyFigure | null {
+    return this.client()?.figures.find((f) => f.key === key) ?? null;
+  }
+
+  protected currencyBlocks(): readonly CurrencyBlock[] {
+    const exposures = this.assessment()?.exposures ?? [];
+    return (this.client()?.fxFlows ?? []).map((flow) => ({
+      flow,
+      exposure: exposures.find((e) => e.currency === flow.currency) ?? null,
+    }));
+  }
+
+  protected checklistDone(assessment: Assessment): number {
+    return assessment.checklist.filter((i) => i.done).length;
   }
 
   private async load(id: string): Promise<void> {
     try {
       this.client.set(await this.api.getClient(id));
+      this.error.set(null);
     } catch (e) {
-      this.error.set(`Kunde konnte nicht geladen werden: ${errorText(e)}`);
+      this.error.set(this.translate.instant('dashboard.loadFailed', { detail: errorText(e) }));
       return;
     }
     try {

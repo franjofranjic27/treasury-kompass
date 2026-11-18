@@ -1,7 +1,9 @@
-import { Injectable } from '@angular/core';
-import { FIGURE_LABELS, QUESTIONS, SECTIONS } from './catalog';
-import { ClientSeed, SEEDS, SeedAnswer } from './mock-data';
+import { Injectable, inject } from '@angular/core';
+import { FIGURE_KEYS, QUESTIONS, SECTIONS } from './catalog';
+import { LanguageService } from './i18n/language';
+import { Localizable, Localized, l, resolveLocalized } from './i18n/localized';
 import { scriptChatAnswer } from './mock-chat';
+import { AssessmentSeed, ClientSeed, SEEDS, SeedAnswer } from './mock-data';
 import {
   Assessment,
   ChatEvent,
@@ -11,12 +13,14 @@ import {
   DocumentStatus,
   HedgeProposal,
   HedgeSettings,
-  Questionnaire
+  Questionnaire,
 } from './models';
 import { ApiError, TreasuryApi } from './treasury-api';
 
+type SummaryBase = Omit<ClientSummary, 'documentCount' | 'openItems' | 'approvalStatus'>;
+
 interface MockClient {
-  readonly summary: Omit<ClientSummary, 'documentCount' | 'openItems' | 'approvalStatus'>;
+  readonly summary: Localizable<SummaryBase>;
   readonly seed: ClientSeed | null;
   readonly answers: Map<string, SeedAnswer>;
   documents: ClientDocument[];
@@ -26,39 +30,64 @@ interface MockClient {
   version: number;
 }
 
-const STATUS_FLOW: readonly DocumentStatus[] = ['UPLOADED', 'TEXT_EXTRACTED', 'INDEXED', 'EXTRACTED'];
+const STATUS_FLOW: readonly DocumentStatus[] = [
+  'UPLOADED',
+  'TEXT_EXTRACTED',
+  'INDEXED',
+  'EXTRACTED',
+];
 const STEP_MS = 1200;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** In-memory implementation; state lives until the page is reloaded. */
+/**
+ * In-memory implementation; state lives until the page is reloaded. Like a backend that honours
+ * Accept-Language, it words rule texts, citations and errors in the active UI language.
+ */
 @Injectable()
 export class MockTreasuryApi extends TreasuryApi {
-  private readonly clients = new Map<string, MockClient>(SEEDS.map((seed) => [seed.id, fromSeed(seed)]));
+  private readonly language = inject(LanguageService);
+  private readonly clients = new Map<string, MockClient>(
+    SEEDS.map((seed) => [seed.id, fromSeed(seed)]),
+  );
 
   async listClients(query: string): Promise<readonly ClientSummary[]> {
     const needle = query.trim().toLowerCase();
     return [...this.clients.values()]
-      .filter((c) => c.summary.name.toLowerCase().includes(needle))
-      .map((c) => this.toSummary(c));
+      .map((c) => this.toSummary(c))
+      .filter((c) => c.name.toLowerCase().includes(needle));
   }
 
   async createClient(name: string): Promise<ClientSummary> {
     const trimmed = name.trim();
-    if (!trimmed) throw new ApiError('Name ist Pflicht.', 400);
-    if ([...this.clients.values()].some((c) => c.summary.name.toLowerCase() === trimmed.toLowerCase())) {
-      throw new ApiError(`Kunde «${trimmed}» existiert bereits.`, 409);
+    if (!trimmed) this.fail(l('Name ist Pflicht.', 'Name is required.'), 400);
+    const exists = [...this.clients.values()].some(
+      (c) => this.toSummary(c).name.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (exists) {
+      this.fail(
+        l(`Kunde «${trimmed}» existiert bereits.`, `Client “${trimmed}” already exists.`),
+        409,
+      );
     }
     const id = `kunde-${Date.now()}`;
     const client: MockClient = {
-      summary: { id, name: trimmed, shortLabel: 'Neu', industry: '–', employees: '–', segment: null, riskProfile: null },
+      summary: {
+        id,
+        name: trimmed,
+        shortLabel: null,
+        industry: null,
+        employees: null,
+        segment: null,
+        riskProfile: null,
+      },
       seed: null,
       answers: new Map(),
       documents: [],
       checklistDone: new Set(),
       hedgeSettings: new Map(),
       approved: false,
-      version: 1
+      version: 1,
     };
     this.clients.set(id, client);
     return this.toSummary(client);
@@ -70,32 +99,37 @@ export class MockTreasuryApi extends TreasuryApi {
       const answer = client.answers.get(key);
       return answer ? Number(answer.value) : null;
     };
+    const source = (key: string) => this.textOrNull(client.answers.get(key)?.source ?? null);
     return {
       ...this.toSummary(client),
-      figures: Object.entries(FIGURE_LABELS).map(([key, label]) => ({
-        key,
-        label,
-        value: number(key),
-        source: client.answers.get(key)?.source ?? null
-      })),
+      figures: FIGURE_KEYS.map((key) => ({ key, value: number(key), source: source(key) })),
       fxFlows: ['eur', 'usd']
         .filter((ccy) => client.answers.has(`fx.${ccy}.inflow`))
         .map((ccy) => ({
           currency: ccy.toUpperCase(),
           inflow: number(`fx.${ccy}.inflow`) ?? 0,
           outflow: number(`fx.${ccy}.outflow`) ?? 0,
-          source: client.answers.get(`fx.${ccy}.inflow`)?.source ?? null
+          source: source(`fx.${ccy}.inflow`),
         })),
       documents: client.documents,
-      minimumLiquidity: number('goals.minimumLiquidity')
+      minimumLiquidity: number('goals.minimumLiquidity'),
     };
   }
 
-  async uploadDocument(clientId: string, file: File, onUpdate: (document: ClientDocument) => void): Promise<void> {
+  async uploadDocument(
+    clientId: string,
+    file: File,
+    onUpdate: (document: ClientDocument) => void,
+  ): Promise<void> {
     const client = this.require(clientId);
     const id = `doc-${Date.now()}`;
     for (const status of STATUS_FLOW) {
-      const document: ClientDocument = { id, fileName: file.name, status, pageCount: status === 'UPLOADED' ? null : 12 };
+      const document: ClientDocument = {
+        id,
+        fileName: file.name,
+        status,
+        pageCount: status === 'UPLOADED' ? null : 12,
+      };
       client.documents = [...client.documents.filter((d) => d.id !== id), document];
       onUpdate(document);
       if (status !== 'EXTRACTED') await delay(STEP_MS);
@@ -106,57 +140,100 @@ export class MockTreasuryApi extends TreasuryApi {
     const client = this.require(clientId);
     return {
       sections: SECTIONS.map((section) => ({
-        ...section,
+        id: section.id,
+        title: this.text(section.title),
+        legalBasis: this.text(section.legalBasis),
         questions: QUESTIONS.filter((q) => q.section === section.id).map((q) => {
           const answer = client.answers.get(q.key);
           return {
             key: q.key,
-            text: q.text,
-            hint: q.hint ?? null,
+            text: this.text(q.text),
+            hint: this.textOrNull(q.hint ?? null),
+            unit: this.textOrNull(q.unit ?? null),
             type: q.type,
-            options: q.options ?? [],
+            options: (q.options ?? []).map((o) => ({ value: o.value, label: this.text(o.label) })),
             value: answer?.value ?? null,
             status: answer?.status ?? 'MISSING',
-            source: answer?.source ?? null
+            origin: answer?.origin ?? null,
+            source: this.textOrNull(answer?.source ?? null),
           };
-        })
-      }))
+        }),
+      })),
     };
   }
 
   async setAnswer(clientId: string, key: string, value: string): Promise<void> {
     const client = this.require(clientId);
     const previous = client.answers.get(key);
-    client.answers.set(key, { value, status: 'CONFIRMED', source: previous?.source ?? 'Berater' });
-    if (previous?.value !== value) this.revoke(client);
+    const changed = previous?.value !== value;
+    client.answers.set(key, {
+      value,
+      status: 'CONFIRMED',
+      origin: changed ? 'ADVISOR' : (previous?.origin ?? 'ADVISOR'),
+      source: previous?.source ?? null,
+    });
+    if (changed) this.revoke(client);
   }
 
   async confirmAnswer(clientId: string, key: string): Promise<void> {
     const client = this.require(clientId);
     const answer = client.answers.get(key);
-    if (!answer) throw new ApiError('Antwort fehlt, bitte zuerst einen Wert erfassen.', 409);
+    if (!answer) {
+      this.fail(
+        l(
+          'Antwort fehlt, bitte zuerst einen Wert erfassen.',
+          'Answer missing, please enter a value first.',
+        ),
+        409,
+      );
+    }
     client.answers.set(key, { ...answer, status: 'CONFIRMED' });
   }
 
   async getAssessment(clientId: string): Promise<Assessment> {
     const client = this.require(clientId);
     if (!client.seed) {
-      throw new ApiError('Noch keine Beurteilung: Unterlagen hochladen und Fragebogen ausfüllen.', 404);
+      this.fail(
+        l(
+          'Noch keine Beurteilung: Unterlagen hochladen und Fragebogen ausfüllen.',
+          'No assessment yet: upload documents and complete the questionnaire.',
+        ),
+        404,
+      );
     }
+    const assessment = resolveLocalized<AssessmentSeed>(
+      client.seed.assessment,
+      this.language.current(),
+    );
     return {
-      ...client.seed.assessment,
+      ...assessment,
       version: client.version,
-      hedges: client.seed.assessment.hedges.map((h) => applySettings(h, client.hedgeSettings.get(h.currency))),
-      checklist: client.seed.checklist.map((item) => ({ ...item, done: client.checklistDone.has(item.id) })),
+      hedges: assessment.hedges.map((h) => applySettings(h, client.hedgeSettings.get(h.currency))),
+      checklist: client.seed.checklist.map((item) => ({
+        id: item.id,
+        text: this.text(item.text),
+        legalBasis: this.text(item.legalBasis),
+        done: client.checklistDone.has(item.id),
+      })),
       unconfirmedAnswers: this.unconfirmed(client),
-      approvalStatus: client.approved ? 'APPROVED' : 'NOT_APPROVED'
+      approvalStatus: client.approved ? 'APPROVED' : 'NOT_APPROVED',
     };
   }
 
-  async setHedgeSettings(clientId: string, currency: string, settings: HedgeSettings): Promise<void> {
+  async setHedgeSettings(
+    clientId: string,
+    currency: string,
+    settings: HedgeSettings,
+  ): Promise<void> {
     const client = this.require(clientId);
     if (settings.startRatio < 0 || settings.startRatio > 100) {
-      throw new ApiError('Startquote muss zwischen 0 und 100 % liegen.', 400);
+      this.fail(
+        l(
+          'Startquote muss zwischen 0 und 100 % liegen.',
+          'Start ratio must be between 0 and 100%.',
+        ),
+        400,
+      );
     }
     client.hedgeSettings.set(currency, settings);
     this.revoke(client);
@@ -175,17 +252,33 @@ export class MockTreasuryApi extends TreasuryApi {
   async approve(clientId: string, assessmentVersion: number): Promise<void> {
     const client = this.require(clientId);
     const assessment = await this.getAssessment(clientId);
-    if (assessmentVersion !== client.version) throw new ApiError('Beurteilung wurde inzwischen geändert.', 409);
+    if (assessmentVersion !== client.version) {
+      this.fail(
+        l('Beurteilung wurde inzwischen geändert.', 'The assessment has changed in the meantime.'),
+        409,
+      );
+    }
     const open = assessment.checklist.filter((i) => !i.done).length;
-    if (assessment.unconfirmedAnswers > 0 || open > 0) {
-      throw new ApiError(`Freigabe blockiert: ${assessment.unconfirmedAnswers} unbestätigte Antworten, ${open} offene Punkte.`, 409);
+    const unconfirmed = assessment.unconfirmedAnswers;
+    if (unconfirmed > 0 || open > 0) {
+      this.fail(
+        l(
+          `Freigabe blockiert: ${unconfirmed} unbestätigte Antworten, ${open} offene Punkte.`,
+          `Approval blocked: ${unconfirmed} unconfirmed answers, ${open} open items.`,
+        ),
+        409,
+      );
     }
     client.approved = true;
   }
 
-  async chat(clientId: string | null, message: string, onEvent: (event: ChatEvent) => void): Promise<void> {
+  async chat(
+    clientId: string | null,
+    message: string,
+    onEvent: (event: ChatEvent) => void,
+  ): Promise<void> {
     const seed = clientId ? (this.clients.get(clientId)?.seed ?? null) : null;
-    for (const event of scriptChatAnswer(seed, message)) {
+    for (const event of scriptChatAnswer(seed, message, this.language.current())) {
       if (event.type === 'token') {
         for (const word of event.text.split(/(?<= )/)) {
           await delay(18);
@@ -198,9 +291,21 @@ export class MockTreasuryApi extends TreasuryApi {
     }
   }
 
+  private text(value: Localized): string {
+    return value[this.language.current()];
+  }
+
+  private textOrNull(value: Localized | null): string | null {
+    return value ? this.text(value) : null;
+  }
+
+  private fail(message: Localized, status: number): never {
+    throw new ApiError(this.text(message), status);
+  }
+
   private require(id: string): MockClient {
     const client = this.clients.get(id);
-    if (!client) throw new ApiError(`Kunde ${id} nicht gefunden.`, 404);
+    if (!client) this.fail(l(`Kunde ${id} nicht gefunden.`, `Client ${id} not found.`), 404);
     return client;
   }
 
@@ -214,12 +319,14 @@ export class MockTreasuryApi extends TreasuryApi {
   }
 
   private toSummary(client: MockClient): ClientSummary {
-    const openChecklist = client.seed ? client.seed.checklist.filter((i) => !client.checklistDone.has(i.id)).length : 0;
+    const openChecklist = client.seed
+      ? client.seed.checklist.filter((i) => !client.checklistDone.has(i.id)).length
+      : 0;
     return {
-      ...client.summary,
+      ...resolveLocalized<SummaryBase>(client.summary, this.language.current()),
       documentCount: client.documents.length,
       openItems: this.unconfirmed(client) + openChecklist,
-      approvalStatus: client.approved ? 'APPROVED' : 'NOT_APPROVED'
+      approvalStatus: client.approved ? 'APPROVED' : 'NOT_APPROVED',
     };
   }
 }
@@ -233,36 +340,49 @@ function fromSeed(seed: ClientSeed): MockClient {
       industry: seed.industry,
       employees: seed.employees,
       segment: seed.segment,
-      riskProfile: seed.riskProfile
+      riskProfile: seed.riskProfile,
     },
     seed,
     answers: new Map(Object.entries(seed.answers)),
-    documents: [{ id: `${seed.id}-doc-1`, fileName: seed.document.fileName, status: 'EXTRACTED', pageCount: seed.document.pageCount }],
+    documents: [
+      {
+        id: `${seed.id}-doc-1`,
+        fileName: seed.document.fileName,
+        status: 'EXTRACTED',
+        pageCount: seed.document.pageCount,
+      },
+    ],
     checklistDone: new Set(),
     hedgeSettings: new Map(),
     approved: false,
-    version: 1
+    version: 1,
   };
 }
 
 /** Approximation for the demo: tranche ratios follow the settings, volumes scale with the average ratio. */
 function applySettings(base: HedgeProposal, settings: HedgeSettings | undefined): HedgeProposal {
   if (!settings) return base;
-  const effectiveStart = Math.min(settings.startRatio, base.cap);
-  const ratios = base.ratios.map((_, i) => Math.max(0, effectiveStart - i * settings.stepDown));
+  const startRatio = Math.min(settings.startRatio, base.cap);
+  const ratios = base.ratios.map((_, i) => Math.max(0, startRatio - i * settings.stepDown));
   const averageRatio = ratios.reduce((sum, r) => sum + r, 0) / ratios.length;
   const factor = base.averageRatio === 0 ? 0 : averageRatio / base.averageRatio;
   return {
     ...base,
+    startRatio,
+    stepDown: settings.stepDown,
     ratios,
     averageRatio,
     hedgedAmountFx: round(base.hedgedAmountFx * factor, 3),
+    hedgedAmountChf: round(base.hedgedAmountChf * factor, 4),
     carryChf: round(base.carryChf * factor, 4),
     limitedByPolicy: settings.startRatio > base.cap,
     scenarioHedgedChf:
       base.scenarioHedgedChf === null || base.scenarioUnhedgedChf === null
         ? null
-        : round(base.scenarioUnhedgedChf - (base.scenarioUnhedgedChf - base.scenarioHedgedChf) * factor, 4)
+        : round(
+            base.scenarioUnhedgedChf - (base.scenarioUnhedgedChf - base.scenarioHedgedChf) * factor,
+            4,
+          ),
   };
 }
 

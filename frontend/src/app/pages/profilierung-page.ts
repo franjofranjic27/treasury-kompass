@@ -1,88 +1,301 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Question, Questionnaire } from '../core/models';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { CurrentClient } from '../core/current-client';
+import { MioPipe, PctPipe } from '../core/format';
+import { Assessment, Question, Questionnaire, QuestionnaireSection } from '../core/models';
 import { RefreshBus } from '../core/refresh-bus';
 import { TreasuryApi } from '../core/treasury-api';
-import { errorText } from './labels';
+import { Badge } from '../shared/badge';
+import { CaseNav } from '../shared/case-nav';
+import { Icon } from '../shared/icon';
+import { FactorList } from '../shared/score';
+import { RISK_TONE, errorText, plural } from './labels';
+import { KnowledgeMatrix, isKnowledgeMatrix } from './questionnaire/knowledge-matrix';
+import { QuestionField } from './questionnaire/question-field';
+
+interface Progress {
+  readonly confirmed: number;
+  readonly total: number;
+  readonly prefilledConfirmed: number;
+  readonly prefilled: number;
+}
 
 @Component({
   selector: 'app-profilierung-page',
-  imports: [RouterLink],
+  imports: [
+    RouterLink,
+    TranslatePipe,
+    MioPipe,
+    PctPipe,
+    Badge,
+    CaseNav,
+    Icon,
+    FactorList,
+    KnowledgeMatrix,
+    QuestionField,
+  ],
   template: `
-    <div class="row between">
-      <h1>FIDLEG-Profilierung</h1>
-      <span class="pill" [class.ok]="progress().confirmed === progress().total">{{ progress().confirmed }} von {{ progress().total }} bestätigt</span>
+    <app-case-nav [clientId]="id()" />
+    <div class="page-title">
+      @if (currentClient.name(); as name) {
+        <span class="eyebrow">{{ name }}</span>
+      }
+      <h1>{{ 'questionnaire.title' | translate }}</h1>
+      <p class="lead">{{ 'questionnaire.lead' | translate }}</p>
     </div>
-    @if (error()) { <p class="error">{{ error() }}</p> }
+
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+
     @if (questionnaire(); as q) {
-      <ol class="stepper">
-        @for (s of q.sections; track s.id) {
-          <li>
-            <button type="button" [class.active]="$index === step()" (click)="step.set($index)">
-              <span class="step-no">{{ $index + 1 }}</span> {{ s.title }}
-              <span class="muted small">{{ confirmedIn($index) }}/{{ s.questions.length }}</span>
-            </button>
-          </li>
-        }
-      </ol>
-      @if (q.sections[step()]; as section) {
-        <section class="card">
-          <div class="row between"><h2>{{ section.title }}</h2><span class="muted small">{{ section.legalBasis }}</span></div>
-          @for (question of section.questions; track question.key) {
-            <div class="question">
-              <div class="row between">
-                <label class="q-text" [attr.for]="question.key">{{ question.text }}</label>
-                @switch (question.status) {
-                  @case ('CONFIRMED') { <span class="pill ok">Bestätigt</span> }
-                  @case ('PROPOSED') { <button class="btn btn-secondary btn-sm" type="button" (click)="confirm(question)">Bestätigen</button> }
-                  @default { <span class="pill warn">Fehlt</span> }
-                }
-              </div>
-              @if (question.hint) { <p class="muted small">{{ question.hint }}</p> }
-              @if (question.options.length) {
-                <select class="input" [id]="question.key" [value]="question.value ?? ''" (change)="save(question, $any($event.target).value)">
-                  <option value="" disabled>Bitte wählen</option>
-                  @for (o of question.options; track o.value) {
-                    <option [value]="o.value" [selected]="o.value === question.value">{{ o.label }}</option>
+      @let p = progress();
+      <section class="progress-grid" [attr.aria-label]="'questionnaire.progress' | translate">
+        <div class="progress">
+          <div class="progress-head">
+            <span>{{ 'questionnaire.progressDone' | translate }}</span>
+            <b>{{ 'common.xOfY' | translate: { x: p.confirmed, y: p.total } }}</b>
+          </div>
+          <div class="progress-bar" aria-hidden="true">
+            <span [style.width.%]="percent(p.confirmed, p.total)"></span>
+          </div>
+        </div>
+        <div class="progress">
+          <div class="progress-head">
+            <span>{{ 'questionnaire.progressPrefilled' | translate }}</span>
+            <b>{{ 'common.xOfY' | translate: { x: p.prefilledConfirmed, y: p.prefilled } }}</b>
+          </div>
+          <div class="progress-bar" aria-hidden="true">
+            <span [style.width.%]="percent(p.prefilledConfirmed, p.prefilled)"></span>
+          </div>
+        </div>
+      </section>
+
+      <nav [attr.aria-label]="'questionnaire.sections' | translate">
+        <ol class="stepper">
+          @for (s of q.sections; track s.id) {
+            @let open = openCount(s);
+            <li>
+              <button
+                type="button"
+                class="step"
+                [class.current]="$index === step()"
+                [attr.aria-current]="$index === step() ? 'step' : null"
+                (click)="step.set($index)"
+              >
+                <span class="step-circle" [class.complete]="open === 0" aria-hidden="true">
+                  @if (open === 0) {
+                    <app-icon name="check" [size]="16" [strokeWidth]="2.5" />
+                  } @else {
+                    {{ $index + 1 }}
                   }
-                </select>
-              } @else {
-                <input class="input" type="number" step="0.1" [id]="question.key" [value]="question.value ?? ''" placeholder="Wert erfassen" (change)="save(question, $any($event.target).value)" />
-              }
-              @if (question.status === 'PROPOSED' && question.source) {
-                <p class="source small"><b>Fundstelle:</b> {{ question.source }}</p>
-              } @else if (question.source && question.source !== 'Berater') {
-                <p class="muted small">Fundstelle: {{ question.source }}</p>
+                </span>
+                <span class="step-text">
+                  <span class="step-label">{{ s.title }}</span>
+                  <span class="meta">{{ stepStatus(s) | translate: { count: open } }}</span>
+                </span>
+              </button>
+            </li>
+          }
+        </ol>
+      </nav>
+
+      @if (q.sections[step()]; as section) {
+        <section class="card card-xl" aria-labelledby="step-title">
+          <div class="card-head-split">
+            <div class="card-title">
+              <span class="eyebrow">{{
+                'questionnaire.stepOf' | translate: { step: step() + 1, total: q.sections.length }
+              }}</span>
+              <h2 id="step-title" tabindex="-1" #stepHeading>{{ section.title }}</h2>
+            </div>
+            <span class="meta-lg">{{
+              'common.legalBasis' | translate: { basis: section.legalBasis }
+            }}</span>
+          </div>
+
+          @if (isMatrix(section)) {
+            <app-knowledge-matrix
+              [questions]="section.questions"
+              (save)="save($event.question, $event.value)"
+              (confirm)="confirm($event)"
+            />
+          } @else {
+            <div class="question-list" [class.question-grid]="isAmountSection(section)">
+              @for (question of section.questions; track question.key) {
+                <app-question-field
+                  [question]="question"
+                  (save)="save(question, $event)"
+                  (confirm)="confirm(question)"
+                />
               }
             </div>
           }
-          <div class="row between mt">
-            <button class="btn btn-secondary" type="button" [disabled]="step() === 0" (click)="step.set(step() - 1)">Zurück</button>
-            @if (step() < q.sections.length - 1) {
-              <button class="btn btn-primary" type="button" (click)="step.set(step() + 1)">Weiter</button>
+
+          @if (assessment(); as a) {
+            @switch (section.id) {
+              @case ('SEGMENT') {
+                <div class="rule-panel">
+                  <span class="tag-rule">{{ 'common.ruleEngine' | translate }}</span>
+                  <p class="rule-result">
+                    {{
+                      a.segment.code
+                        ? ('segment.' + a.segment.code | translate)
+                        : ('common.dash' | translate)
+                    }}
+                  </p>
+                  <p>{{ a.segment.reason }} · {{ a.segment.legalBasis }}</p>
+                </div>
+              }
+              @case ('FINANCIALS') {
+                <div class="rule-panel">
+                  <div class="rule-head">
+                    <span class="tag-rule">{{ 'common.ruleEngine' | translate }}</span>
+                    <span class="meta-lg">{{ 'profile.objective' | translate }}</span>
+                  </div>
+                  <p class="rule-result">
+                    {{ 'profile.capacityScore' | translate: { score: a.capacity.score } }}
+                  </p>
+                  <app-factor-list [factors]="a.capacity.factors" />
+                </div>
+              }
+              @case ('FX_FLOWS') {
+                <div class="rule-panel">
+                  <div class="rule-head">
+                    <span class="tag-rule">{{ 'common.ruleEngine' | translate }}</span>
+                    <span class="meta-lg">{{ 'questionnaire.exposureNote' | translate }}</span>
+                  </div>
+                  <ul class="exposure-list">
+                    @for (e of a.exposures; track e.currency) {
+                      <li>
+                        <span>
+                          <b>{{ e.currency }}</b> · {{ 'direction.' + e.direction | translate }}
+                          {{ e.currency }} {{ e.netPosition | mio: 1 : true }} ·
+                          {{
+                            'questionnaire.ebitShare'
+                              | translate: { pct: (e.sensitivityPctEbit | pct) }
+                          }}
+                        </span>
+                        <app-badge [tone]="riskTone[e.riskLevel]">{{
+                          'risk.' + e.riskLevel | translate
+                        }}</app-badge>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+              @case ('GOALS') {
+                @if (a.hedges[0]; as hedge) {
+                  <div class="rule-panel">
+                    <span class="tag-rule">{{ 'common.ruleEngine' | translate }}</span>
+                    <p class="rule-result">
+                      {{ 'questionnaire.capResult' | translate: { cap: (hedge.cap | pct: false) } }}
+                    </p>
+                    <p>{{ 'questionnaire.capRule' | translate }}</p>
+                  </div>
+                }
+              }
+              @case ('RISK_TOLERANCE') {
+                <div class="rule-panel">
+                  <div class="rule-head">
+                    <span class="tag-rule">{{ 'common.ruleEngine' | translate }}</span>
+                    <span class="meta-lg">{{ 'profile.subjective' | translate }}</span>
+                  </div>
+                  <p class="rule-result">
+                    {{ 'profile.willingnessScore' | translate: { score: a.willingness.score } }}
+                  </p>
+                  <app-factor-list [factors]="a.willingness.factors" />
+                  <p class="rule-foot">
+                    {{
+                      'questionnaire.profileLine'
+                        | translate
+                          : {
+                              score: a.profile.score,
+                              profile: a.profile.code
+                                ? ('riskProfile.' + a.profile.code | translate)
+                                : '–',
+                              capacity: a.capacity.score,
+                              willingness: a.willingness.score,
+                            }
+                    }}
+                  </p>
+                </div>
+              }
+              @case ('KNOWLEDGE') {
+                <div class="note" role="note">
+                  <app-icon name="info" />
+                  <span>{{ 'questionnaire.recalcNote' | translate }}</span>
+                </div>
+              }
+            }
+          }
+
+          <div class="step-actions">
+            @if (step() > 0) {
+              <button class="btn btn-secondary" type="button" (click)="goTo(step() - 1)">
+                {{ 'questionnaire.back' | translate: { section: q.sections[step() - 1].title } }}
+              </button>
             } @else {
-              <a class="btn btn-primary" [routerLink]="['/clients', id()]">Zum Dashboard</a>
+              <span></span>
+            }
+            @if (step() < q.sections.length - 1) {
+              <button class="btn btn-primary" type="button" (click)="goTo(step() + 1)">
+                {{ 'questionnaire.next' | translate: { section: q.sections[step() + 1].title }
+                }}<app-icon name="chevron-right" />
+              </button>
+            } @else {
+              <a class="btn btn-primary" [routerLink]="['/clients', id()]"
+                >{{ 'common.toDashboard' | translate }}<app-icon name="chevron-right"
+              /></a>
             }
           </div>
         </section>
       }
     } @else if (!error()) {
-      <p class="muted">Fragebogen wird geladen …</p>
+      <p class="meta-lg" role="status">{{ 'questionnaire.loading' | translate }}</p>
     }
-  `
+  `,
 })
 export class ProfilierungPage {
   readonly id = input.required<string>();
 
+  protected readonly currentClient = inject(CurrentClient);
   private readonly api = inject(TreasuryApi);
   private readonly refresh = inject(RefreshBus);
+  private readonly translate = inject(TranslateService);
+  private readonly injector = inject(Injector);
+  private readonly stepHeading = viewChild<ElementRef<HTMLElement>>('stepHeading');
 
+  protected readonly riskTone = RISK_TONE;
+  protected readonly isMatrix = (section: QuestionnaireSection) =>
+    isKnowledgeMatrix(section.questions);
   protected readonly questionnaire = signal<Questionnaire | null>(null);
+  protected readonly assessment = signal<Assessment | null>(null);
   protected readonly step = signal(0);
   protected readonly error = signal<string | null>(null);
-  protected readonly progress = computed(() => {
+  protected readonly progress = computed<Progress>(() => {
     const questions = this.questionnaire()?.sections.flatMap((s) => s.questions) ?? [];
-    return { confirmed: questions.filter((q) => q.status === 'CONFIRMED').length, total: questions.length };
+    const prefilled = questions.filter((q) => q.origin !== null && q.origin !== 'ADVISOR');
+    const confirmed = (list: readonly Question[]) =>
+      list.filter((q) => q.status === 'CONFIRMED').length;
+    return {
+      confirmed: confirmed(questions),
+      total: questions.length,
+      prefilledConfirmed: confirmed(prefilled),
+      prefilled: prefilled.length,
+    };
   });
 
   constructor() {
@@ -92,8 +305,29 @@ export class ProfilierungPage {
     });
   }
 
-  protected confirmedIn(index: number): number {
-    return this.questionnaire()?.sections[index].questions.filter((q) => q.status === 'CONFIRMED').length ?? 0;
+  protected percent(part: number, total: number): number {
+    return total === 0 ? 0 : Math.round((part / total) * 100);
+  }
+
+  protected openCount(section: QuestionnaireSection): number {
+    return section.questions.filter((q) => q.status !== 'CONFIRMED').length;
+  }
+
+  protected stepStatus(section: QuestionnaireSection): string {
+    const open = this.openCount(section);
+    if (open === 0) return 'questionnaire.stepDone';
+    const missing = section.questions.some((q) => q.status === 'MISSING');
+    return plural(missing ? 'questionnaire.stepOpen' : 'questionnaire.stepToConfirm', open);
+  }
+
+  protected isAmountSection(section: QuestionnaireSection): boolean {
+    return section.questions.every((q) => q.options.length === 0);
+  }
+
+  /** Back/next move focus to the new step heading, so keyboard and screen reader users land on it. */
+  protected goTo(index: number): void {
+    this.step.set(index);
+    afterNextRender(() => this.stepHeading()?.nativeElement.focus(), { injector: this.injector });
   }
 
   protected async confirm(question: Question): Promise<void> {
@@ -116,10 +350,16 @@ export class ProfilierungPage {
 
   private async load(id: string): Promise<void> {
     try {
-      this.questionnaire.set(await this.api.getQuestionnaire(id));
+      const [questionnaire, assessment] = await Promise.all([
+        this.api.getQuestionnaire(id),
+        // The rule results are a supplement on this screen; without an assessment the questions still work.
+        this.api.getAssessment(id).catch(() => null),
+      ]);
+      this.questionnaire.set(questionnaire);
+      this.assessment.set(assessment);
       this.error.set(null);
     } catch (e) {
-      this.error.set(`Fragebogen konnte nicht geladen werden: ${errorText(e)}`);
+      this.error.set(this.translate.instant('questionnaire.loadFailed', { detail: errorText(e) }));
     }
   }
 }

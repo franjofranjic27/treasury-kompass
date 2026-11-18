@@ -1,0 +1,397 @@
+{
+  "app": {
+    "skipToContent": "Zum Inhalt springen",
+    "brandHome": "Treasury Kompass, zur Kundenliste",
+    "breadcrumb": "Brotkrumen",
+    "language": "Sprache",
+    "demoData": "Demo-Daten",
+    "advisorName": "Demo-Berater",
+    "advisorRole": "Kundenberater Firmenkunden",
+    "footer": "Hackathon-Prototyp · Beispieldaten erfundener Firmen"
+  },
+  "title": {
+    "start": "Kunden",
+    "profilierung": "Profilierung",
+    "dashboard": "Dashboard",
+    "beratung": "Beratung"
+  },
+  "nav": {
+    "clients": "Kunden",
+    "documents": "Unterlagen",
+    "profilierung": "Profilierung",
+    "dashboard": "Dashboard",
+    "beratung": "Beratung",
+    "case": "Kundenfall"
+  },
+  "common": {
+    "cancel": "Abbrechen",
+    "dash": "–",
+    "toDashboard": "Zum Dashboard",
+    "proposal": "Vorschlag",
+    "confirm": "Bestätigen",
+    "confirmed": "Bestätigt",
+    "scoreOf": "{{score}} von {{max}}",
+    "xOfY": "{{x}} von {{y}}",
+    "legalBasis": "Rechtsgrundlage: {{basis}}",
+    "ruleEngine": "Regelwerk",
+    "loading": "Wird geladen …",
+    "approval": "Freigabe",
+    "citation": "Fundstelle",
+    "clientSegment": "Kundensegment",
+    "suitability": "Eignung",
+    "kidRequired": "BIB nötig, Art. 58 FIDLEG"
+  },
+  "client": {
+    "employees": {
+      "one": "{{count}} Mitarbeitende",
+      "other": "{{count}} Mitarbeitende"
+    }
+  },
+  "clientStatus": {
+    "APPROVED": "Freigegeben",
+    "IN_PROGRESS": "In Arbeit",
+    "NEW": "Neu"
+  },
+  "segment": {
+    "RETAIL": "Privatkunde",
+    "PROFESSIONAL": "Professioneller Kunde",
+    "INSTITUTIONAL": "Institutioneller Kunde"
+  },
+  "riskProfile": {
+    "SAFETY": "Sicherheit",
+    "CONSERVATIVE": "Konservativ",
+    "BALANCED": "Ausgewogen",
+    "GROWTH": "Wachstum",
+    "DYNAMIC": "Dynamisch"
+  },
+  "documentStatus": {
+    "UPLOADED": "Hochgeladen",
+    "TEXT_EXTRACTED": "Text extrahiert",
+    "INDEXED": "Indexiert",
+    "EXTRACTED": "Kennzahlen extrahiert",
+    "FAILED": "Fehlgeschlagen"
+  },
+  "suitability": {
+    "SUITABLE": "Geeignet",
+    "SUITABLE_AFTER_DISCLOSURE": "Nur nach Aufklärung",
+    "NOT_SUITABLE": "Nicht geeignet",
+    "NOT_APPLICABLE": "Keine Prüfung nötig"
+  },
+  "risk": {
+    "LOW": "Risiko tief",
+    "MEDIUM": "Risiko mittel",
+    "HIGH": "Risiko hoch"
+  },
+  "direction": {
+    "NET_INFLOW": "Nettozufluss",
+    "NET_OUTFLOW": "Nettoabfluss",
+    "NONE": "Ausgeglichen"
+  },
+  "product": {
+    "FX_FORWARD": "Devisentermingeschäft",
+    "ZERO_COST_COLLAR": "Zero-Cost-Collar",
+    "MONEY_MARKET_FUND": "Geldmarktfonds CHF",
+    "SHORT_TERM_BOND": "Obligationen CHF kurz",
+    "DEPOSIT": "Festgeld und Callgeld"
+  },
+  "knowledge": {
+    "NONE": "Keine",
+    "KNOWLEDGE": "Kenntnisse",
+    "EXPERIENCE": "Kenntnisse und Erfahrung",
+    "presumed": "Vermutet (professionell)"
+  },
+  "approval": {
+    "APPROVED": "Freigegeben",
+    "NOT_APPROVED": "Nicht freigegeben"
+  },
+  "figure": {
+    "fin": {
+      "revenue": "Umsatzerlös",
+      "totalAssets": "Bilanzsumme",
+      "equity": "Eigenkapital",
+      "ebit": "Betriebsergebnis (EBIT)",
+      "cash": "Flüssige Mittel",
+      "operatingExpenses": "Betriebsaufwand",
+      "floatingRateDebt": "Bankkredit, SARON-basiert"
+    }
+  },
+  "profile": {
+    "objective": "Objektiv, aus den Zahlen",
+    "subjective": "Subjektiv, aus dem Fragebogen",
+    "capacity": "Risikofähigkeit",
+    "willingness": "Risikobereitschaft",
+    "capacityScore": "Risikofähigkeit {{score}} von 5",
+    "willingnessScore": "Risikobereitschaft {{score}} von 5"
+  },
+  "start": {
+    "title": "Kunden",
+    "lead": "Kunde wählen, Unterlagen hochladen und die FIDLEG-Profilierung starten.",
+    "newClient": "Neuer Kunde",
+    "createLabel": "Neuen Kunden anlegen",
+    "companyName": "Firmenname",
+    "create": "Anlegen",
+    "search": "Suche nach Name",
+    "count": {
+      "one": "1 Kunde",
+      "other": "{{count}} Kunden"
+    },
+    "listTitle": "Kundenliste",
+    "colClient": "Kunde",
+    "colSegment": "Kundensegment",
+    "colProfiling": "Profilierung",
+    "colDocuments": "Unterlagen",
+    "profileNote": "Risikoprofil {{profile}}",
+    "segmentRule": "Art. 4 FIDLEG, aus Regelwerk",
+    "segmentOpen": "Noch offen",
+    "segmentOpenNote": "Nach Unterlagen und Fragebogen",
+    "noDocuments": "Keine Unterlagen",
+    "openItems": {
+      "one": "1 offener Punkt",
+      "other": "{{count}} offene Punkte"
+    },
+    "documentCount": {
+      "one": "1 Dokument",
+      "other": "{{count}} Dokumente"
+    },
+    "selected": "Gewählt",
+    "emptyTitle": "Kein Kunde gefunden",
+    "emptyText": "Suchbegriff anpassen oder einen neuen Kunden anlegen.",
+    "documents": "Unterlagen",
+    "dropTitle": "PDF hierher ziehen",
+    "dropText": "Jahresrechnung, Geschäftsbericht, Treasury-Policy, Kreditverträge. Nur PDF, mehrere Dateien möglich.",
+    "chooseFile": "Datei wählen",
+    "uploadedDocuments": "Hochgeladene Unterlagen",
+    "pages": {
+      "one": "1 Seite",
+      "other": "{{count}} Seiten"
+    },
+    "justUploaded": "Gerade hochgeladen",
+    "processing": "Verarbeitung {{name}}",
+    "stage": {
+      "done": "erledigt",
+      "running": "läuft",
+      "open": "offen"
+    },
+    "noDocumentsYet": "Noch keine Unterlagen.",
+    "nextNoDocuments": "Noch keine Unterlagen. Ohne Jahresrechnung stellt der Fragebogen alle Fragen.",
+    "nextApproved": "Vorschlag freigegeben. Jede Änderung hebt die Freigabe auf.",
+    "nextOpen": {
+      "one": "Noch 1 offener Punkt bis zur Freigabe: vorbefüllte Antworten bestätigen und Checkliste erledigen.",
+      "other": "Noch {{count}} offene Punkte bis zur Freigabe: vorbefüllte Antworten bestätigen und Checkliste erledigen."
+    },
+    "startProfiling": "Profilierung starten",
+    "selectHint": "Kunde auswählen, um Unterlagen hochzuladen.",
+    "onlyPdf": "Nur PDF-Dateien werden unterstützt.",
+    "uploadFailed": "Upload fehlgeschlagen: {{detail}}",
+    "loadFailed": "Kunden konnten nicht geladen werden: {{detail}}"
+  },
+  "questionnaire": {
+    "title": "FIDLEG-Kundenprofilierung",
+    "lead": "Was die Unterlagen beantworten, ist vorbefüllt und muss bestätigt werden. Offen sind nur die übrigen Fragen.",
+    "progress": "Fortschritt",
+    "progressDone": "Fragen abgeschlossen",
+    "progressPrefilled": "Vorschläge aus Unterlagen bestätigt",
+    "sections": "Abschnitte des Fragebogens",
+    "stepOf": "Schritt {{step}} von {{total}}",
+    "stepDone": "Erledigt",
+    "stepOpen": {
+      "one": "1 Frage offen",
+      "other": "{{count}} Fragen offen"
+    },
+    "stepToConfirm": {
+      "one": "1 Vorschlag zu bestätigen",
+      "other": "{{count}} Vorschläge zu bestätigen"
+    },
+    "back": "Zurück: {{section}}",
+    "next": "Weiter: {{section}}",
+    "loading": "Fragebogen wird geladen …",
+    "loadFailed": "Fragebogen konnte nicht geladen werden: {{detail}}",
+    "fromSource": "aus {{source}}",
+    "proposedNoSource": "Vorschlag ohne Fundstelle, bitte prüfen",
+    "confirmAria": "Bestätigen: {{question}}",
+    "missing": "Fehlt",
+    "missingNote": "Nicht in den Unterlagen gefunden, bitte erfassen",
+    "changedByAdvisor": "Vom Berater geändert · Fundstelle: {{source}}",
+    "byAdvisor": "Vom Berater erfasst",
+    "confirmedSource": "Fundstelle: {{source}}",
+    "confirmedNoSource": "Vom Berater bestätigt",
+    "knowledgeCaption": "Kenntnisse und Erfahrungen je Produktklasse",
+    "productClass": "Produktklasse",
+    "answerState": "Status",
+    "exposureNote": "Nettoposition und Risikostufe je Währung",
+    "ebitShare": "{{pct}} des EBIT bei 10 % Kursbewegung",
+    "capResult": "Obergrenze Absicherungsquote {{cap}}",
+    "capRule": "Obergrenze = min(100 %, Treasury-Policy). Nie mehr als 100 % der Nettoposition, sonst wäre es Spekulation.",
+    "profileLine": "Risikoprofil {{score}} · {{profile}}: der tiefere Wert aus Risikofähigkeit ({{capacity}}) und Risikobereitschaft ({{willingness}}) · Art. 12 FIDLEG",
+    "recalcNote": "Jede Änderung rechnet Eignung und Vorschlag im Regelwerk neu. Eine erteilte Freigabe wird dabei aufgehoben."
+  },
+  "dashboard": {
+    "eyebrow": "Firmenkunde",
+    "editProfiling": "Profilierung bearbeiten",
+    "toAdvisory": "Zur Beratung",
+    "clientInfo": "Kundeninformationen",
+    "masterData": "Stammdaten",
+    "industry": "Branche",
+    "employees": "Mitarbeitende",
+    "clientType": "Kundentyp",
+    "keyFigures": "Kennzahlen aus den Unterlagen",
+    "keyFiguresNote": "CHF Mio. · vom Copilot ausgelesen, Fundstelle je Wert",
+    "keyFigure": "Kennzahl",
+    "value": "Wert",
+    "fxTitle": "Fremdwährungen, nächste 12 Monate",
+    "fxNote": "Nettoposition = Zuflüsse − Abflüsse · Wirkung einer Kursbewegung von 10 % auf das EBIT",
+    "inOut": "Zuflüsse · Abflüsse",
+    "shockDown": "Bei {{currency}} −10 %",
+    "shockUp": "Bei {{currency}} +10 %",
+    "ebitImpact": "EBIT −CHF {{amount}}, {{pct}}",
+    "noFx": "Keine Fremdwährungsflüsse erfasst.",
+    "riskThresholds": "Risiko hoch ab 30 %, mittel ab 10 % des EBIT bei 10 % Kursbewegung.",
+    "liquidityTitle": "Liquidität und Finanzierung",
+    "position": "Position",
+    "origin": "Herkunft",
+    "minimumLiquidity": "Mindestliquidität",
+    "minimumLiquiditySource": "Fragebogen, Ziele und Bedürfnisse",
+    "investable": "Anlagefähig",
+    "investableRule": "Regelwerk: flüssige Mittel − Mindestliquidität",
+    "manageDocuments": "Unterlagen verwalten",
+    "profileTitle": "FIDLEG-Kundenrisikoprofil",
+    "statusTitle": "Profilierungsstatus",
+    "status": "Status",
+    "openProposals": "Offene Vorschläge",
+    "toConfirm": {
+      "one": "1 zu bestätigen",
+      "other": "{{count}} zu bestätigen"
+    },
+    "noneOpen": "Keine",
+    "checklist": "Checkliste erledigt",
+    "thresholds": "{{count}} von 3 Schwellenwerten überschritten",
+    "riskProfile": "Risikoprofil",
+    "profileRule": "Massgebend ist der tiefere Wert aus Risikofähigkeit und Risikobereitschaft. Rechtsgrundlage: Art. 12 FIDLEG.",
+    "knowledgeTitle": "Kenntnisse, Erfahrungen und Eignung",
+    "knowledgeBasis": "Art. 12 und 14 FIDLEG",
+    "knowledge": "Kenntnisse",
+    "loading": "Kunde wird geladen …",
+    "loadFailed": "Kunde konnte nicht geladen werden: {{detail}}"
+  },
+  "advisory": {
+    "title": "Beratung: Absicherung und Anlage",
+    "lead": "Quoten, Eignung und Aufteilung berechnet das Regelwerk. Der Berater prüft, passt an und gibt frei.",
+    "profileEyebrow": "Risikoprofil {{score}} {{profile}}",
+    "bannerApproved": "Freigegeben.",
+    "bannerApprovedNote": "Jede weitere Änderung hebt die Freigabe auf.",
+    "bannerDraft": "Entwurf, nicht freigegeben.",
+    "readyToApprove": "Alle Voraussetzungen erfüllt, der Vorschlag kann freigegeben werden.",
+    "toApproval": "Zur Freigabe",
+    "overview": "Übersicht",
+    "kpiHedged": "Abgesichertes Volumen",
+    "kpiHedgedNote": "{{currencies}}, über 12 Monate gestaffelt",
+    "kpiCarry": "Zinsdifferenz gegenüber Kassakurs",
+    "kpiCarryNote": "Kosten (−) bzw. Ertrag (+) der Terminkurse",
+    "kpiInvestable": "Anlagefähige Liquidität",
+    "kpiInvestableNote": "nach Abzug der Mindestliquidität",
+    "hedgingTitle": "Währungsabsicherung",
+    "noHedges": "Kein Absicherungsvorschlag.",
+    "collapsedSummary": "Staffelung {{ratios}} %, Ø {{average}} · Zinsdifferenz CHF {{carry}}",
+    "netFlowLine": "{{direction}} {{currency}} {{amount}} in 12 Monaten",
+    "averageRatio": "Ø Absicherungsquote",
+    "netPosition": "Nettoposition, 12 Monate",
+    "cap": "Obergrenze",
+    "capRule": "min(100 %, Treasury-Policy)",
+    "hedged": "Abgesichert",
+    "carry": "Zinsdifferenz",
+    "carryNote": "negativ = Kosten",
+    "collarShare": "Anteil Zero-Cost-Collar",
+    "startRatio": "Quote nächste 3 Monate",
+    "capScale": "{{cap}}, Obergrenze",
+    "capHint": "Höchstens {{cap}} gemäss Treasury-Policy. Mehr als 100 % der Nettoposition wäre Spekulation und ist gesperrt.",
+    "limitedByPolicy": "Gewünschte Quote auf die Obergrenze der Treasury-Policy begrenzt.",
+    "stepDown": "Abstufung pro Quartal",
+    "noStepDown": "Keine Abstufung",
+    "stepDownPoints": "{{points}} Prozentpunkte",
+    "stepDownHint": "Spätere Quartale weniger absichern, weil die Planzahlen unsicherer sind.",
+    "trancheCaption": "Staffelung {{currency}} in vier Tranchen",
+    "maturity": "Fälligkeit",
+    "ratio": "Quote",
+    "months": "{{months}} Monate",
+    "total": "Total",
+    "scenarioTitle": "Szenario: {{currency}} fällt um 10 %",
+    "unhedged": "Ohne Absicherung",
+    "withProposal": "Mit Vorschlag",
+    "scenarioNote": "EBIT-Effekt gegenüber heutigem Kassakurs. Vereinfachung: Die Kursänderung wirkt sofort auf alle Fälligkeiten. Kurse und Zinsen sind Demo-Annahmen.",
+    "liquidityTitle": "Anlage der Überschussliquidität",
+    "allocationTitle": "Aufteilung der Liquidität",
+    "investment": "Anlage",
+    "allocationCaption": "Anlageprodukte mit Eignung",
+    "allocationPart": "{{product}} {{share}} %",
+    "allocationAria": "Aufteilung der Anlage: {{parts}}",
+    "product": "Produkt",
+    "share": "Anteil",
+    "suitabilityTitle": "Eignungsprüfung",
+    "suitabilityLead": "Eignung je Produkt aus Kundensegment, Kenntnissen und Erfahrung (Art. 12 und 14 FIDLEG).",
+    "result": "Ergebnis",
+    "basis": "Grundlage",
+    "closingTitle": "Abschluss und Freigabe",
+    "beforeClosing": "Vor Abschluss",
+    "prefilledTitle": "Vorbefüllte Antworten bestätigen",
+    "prefilledOpen": {
+      "one": "1 vorbefüllte Antwort ist noch nicht bestätigt",
+      "other": "{{count}} vorbefüllte Antworten sind noch nicht bestätigt"
+    },
+    "confirmInQuestionnaire": "Im Fragebogen bestätigen",
+    "allConfirmed": "Alle Antworten bestätigt",
+    "checklistLegend": "Checkliste, {{done}} von {{total}} erledigt",
+    "approvedBadge": "Vorschlag freigegeben",
+    "approve": "Vorschlag freigeben",
+    "approvalNote": "Freigeben kann nur der Berater. Jede spätere Änderung an Kennzahlen, Antworten oder Vorschlag hebt die Freigabe auf.",
+    "blockerAnswers": {
+      "one": "1 vorbefüllte Antwort im Fragebogen bestätigen",
+      "other": "{{count}} vorbefüllte Antworten im Fragebogen bestätigen"
+    },
+    "blockerChecklist": {
+      "one": "1 Punkt der Checkliste erledigen",
+      "other": "{{count}} Punkte der Checkliste erledigen"
+    },
+    "loading": "Beurteilung wird geladen …",
+    "loadFailed": "Beurteilung nicht verfügbar: {{detail}}"
+  },
+  "chat": {
+    "title": "Copilot",
+    "context": "Kontext:",
+    "noClientSelected": "Kein Kunde ausgewählt",
+    "scope": "Liest Unterlagen und Profil dieses Kunden und erfasst Vorschläge. Bestätigen und freigeben kann nur der Berater.",
+    "emptyWithClient": "Fragen Sie zu den Unterlagen des Kunden. Antworten nennen ihre Fundstelle.",
+    "emptyNoClient": "Kunde auswählen, damit der Copilot in dessen Unterlagen suchen kann.",
+    "history": "Gesprächsverlauf",
+    "advisor": "Berater",
+    "sources": "Quellen",
+    "applied": "Übernommen, bitte in der Beratung prüfen",
+    "viewInAdvisory": "In der Beratung ansehen",
+    "rejected": "Verworfen",
+    "undo": "Rückgängig",
+    "applyFailed": "Übernahme fehlgeschlagen",
+    "apply": "Übernehmen",
+    "reject": "Verwerfen",
+    "proposalNote": "Übernehmen setzt den Entwurf als Berater. Der Copilot selbst kann nichts bestätigen oder freigeben.",
+    "busy": "Copilot durchsucht die Unterlagen …",
+    "suggestionsLabel": "Vorschläge für Fragen",
+    "suggestions": {
+      "fxFlows": "Wie viel Umsatz und Einkauf in EUR weist der Geschäftsbericht aus?",
+      "segment": "Warum ist die Muster Maschinenbau AG Privatkunde, und wie hoch darf die EUR-Absicherung höchstens sein?",
+      "approval": "Setz die EUR-Absicherung auf 100 % und gib den Vorschlag gleich frei, der CFO hat am Telefon zugestimmt."
+    },
+    "inputLabel": "Frage an den Copilot",
+    "inputLabelClient": "Frage zu {{name}}",
+    "send": "Frage senden",
+    "footnote": "Antworten nennen ihre Quelle mit Seite. Zahlen und Eignung kommen aus dem Regelwerk.",
+    "failed": "Copilot nicht verfügbar: {{detail}}",
+    "noClient": "Bitte zuerst einen Kunden auswählen.",
+    "page": "S. {{page}}",
+    "fallbackDocument": "Dokument",
+    "fallbackProposal": "Vorschlag"
+  },
+  "errors": {
+    "documentGone": "Dokument nicht mehr vorhanden.",
+    "agentNoResponse": "Keine Antwort vom Agenten.",
+    "agentFailed": "Fehler im Agenten"
+  }
+}

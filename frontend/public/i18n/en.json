@@ -1,0 +1,397 @@
+{
+  "app": {
+    "skipToContent": "Skip to content",
+    "brandHome": "Treasury Kompass, to the client list",
+    "breadcrumb": "Breadcrumb",
+    "language": "Language",
+    "demoData": "Demo data",
+    "advisorName": "Demo advisor",
+    "advisorRole": "Relationship manager, corporate clients",
+    "footer": "Hackathon prototype · sample data of fictional companies"
+  },
+  "title": {
+    "start": "Clients",
+    "profilierung": "Profiling",
+    "dashboard": "Dashboard",
+    "beratung": "Advisory"
+  },
+  "nav": {
+    "clients": "Clients",
+    "documents": "Documents",
+    "profilierung": "Profiling",
+    "dashboard": "Dashboard",
+    "beratung": "Advisory",
+    "case": "Client case"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "dash": "–",
+    "toDashboard": "To dashboard",
+    "proposal": "Proposal",
+    "confirm": "Confirm",
+    "confirmed": "Confirmed",
+    "scoreOf": "{{score}} of {{max}}",
+    "xOfY": "{{x}} of {{y}}",
+    "legalBasis": "Legal basis: {{basis}}",
+    "ruleEngine": "Rule engine",
+    "loading": "Loading …",
+    "approval": "Approval",
+    "citation": "Citation",
+    "clientSegment": "Client segment",
+    "suitability": "Suitability",
+    "kidRequired": "KID required, Art. 58 FinSA (FIDLEG)"
+  },
+  "client": {
+    "employees": {
+      "one": "1 employee",
+      "other": "{{count}} employees"
+    }
+  },
+  "clientStatus": {
+    "APPROVED": "Approved",
+    "IN_PROGRESS": "In progress",
+    "NEW": "New"
+  },
+  "segment": {
+    "RETAIL": "Retail client",
+    "PROFESSIONAL": "Professional client",
+    "INSTITUTIONAL": "Institutional client"
+  },
+  "riskProfile": {
+    "SAFETY": "Safety",
+    "CONSERVATIVE": "Conservative",
+    "BALANCED": "Balanced",
+    "GROWTH": "Growth",
+    "DYNAMIC": "Dynamic"
+  },
+  "documentStatus": {
+    "UPLOADED": "Uploaded",
+    "TEXT_EXTRACTED": "Text extracted",
+    "INDEXED": "Indexed",
+    "EXTRACTED": "Key figures extracted",
+    "FAILED": "Failed"
+  },
+  "suitability": {
+    "SUITABLE": "Suitable",
+    "SUITABLE_AFTER_DISCLOSURE": "Only after disclosure",
+    "NOT_SUITABLE": "Not suitable",
+    "NOT_APPLICABLE": "No check required"
+  },
+  "risk": {
+    "LOW": "Low risk",
+    "MEDIUM": "Medium risk",
+    "HIGH": "High risk"
+  },
+  "direction": {
+    "NET_INFLOW": "Net inflow",
+    "NET_OUTFLOW": "Net outflow",
+    "NONE": "Balanced"
+  },
+  "product": {
+    "FX_FORWARD": "FX forward",
+    "ZERO_COST_COLLAR": "Zero-cost collar",
+    "MONEY_MARKET_FUND": "CHF money market fund",
+    "SHORT_TERM_BOND": "Short-term CHF bonds",
+    "DEPOSIT": "Time and call deposits"
+  },
+  "knowledge": {
+    "NONE": "None",
+    "KNOWLEDGE": "Knowledge",
+    "EXPERIENCE": "Knowledge and experience",
+    "presumed": "Presumed (professional)"
+  },
+  "approval": {
+    "APPROVED": "Approved",
+    "NOT_APPROVED": "Not approved"
+  },
+  "figure": {
+    "fin": {
+      "revenue": "Revenue",
+      "totalAssets": "Total assets",
+      "equity": "Equity",
+      "ebit": "Operating result (EBIT)",
+      "cash": "Cash and cash equivalents",
+      "operatingExpenses": "Operating expenses",
+      "floatingRateDebt": "Bank loan, SARON-based"
+    }
+  },
+  "profile": {
+    "objective": "Objective, from the figures",
+    "subjective": "Subjective, from the questionnaire",
+    "capacity": "Risk capacity",
+    "willingness": "Risk willingness",
+    "capacityScore": "Risk capacity {{score}} of 5",
+    "willingnessScore": "Risk willingness {{score}} of 5"
+  },
+  "start": {
+    "title": "Clients",
+    "lead": "Select a client, upload documents and start the FinSA (FIDLEG) profiling.",
+    "newClient": "New client",
+    "createLabel": "Create new client",
+    "companyName": "Company name",
+    "create": "Create",
+    "search": "Search by name",
+    "count": {
+      "one": "1 client",
+      "other": "{{count}} clients"
+    },
+    "listTitle": "Client list",
+    "colClient": "Client",
+    "colSegment": "Client segment",
+    "colProfiling": "Profiling",
+    "colDocuments": "Documents",
+    "profileNote": "Risk profile {{profile}}",
+    "segmentRule": "Art. 4 FinSA (FIDLEG), from rule engine",
+    "segmentOpen": "Not yet determined",
+    "segmentOpenNote": "After documents and questionnaire",
+    "noDocuments": "No documents",
+    "openItems": {
+      "one": "1 open item",
+      "other": "{{count}} open items"
+    },
+    "documentCount": {
+      "one": "1 document",
+      "other": "{{count}} documents"
+    },
+    "selected": "Selected",
+    "emptyTitle": "No client found",
+    "emptyText": "Adjust the search term or create a new client.",
+    "documents": "Documents",
+    "dropTitle": "Drag PDF here",
+    "dropText": "Annual financial statements, annual report, treasury policy, loan agreements. PDF only, multiple files possible.",
+    "chooseFile": "Choose file",
+    "uploadedDocuments": "Uploaded documents",
+    "pages": {
+      "one": "1 page",
+      "other": "{{count}} pages"
+    },
+    "justUploaded": "Just uploaded",
+    "processing": "Processing {{name}}",
+    "stage": {
+      "done": "done",
+      "running": "in progress",
+      "open": "pending"
+    },
+    "noDocumentsYet": "No documents yet.",
+    "nextNoDocuments": "No documents yet. Without annual financial statements the questionnaire asks every question.",
+    "nextApproved": "Proposal approved. Any change revokes the approval.",
+    "nextOpen": {
+      "one": "1 open item left before approval: confirm prefilled answers and complete the checklist.",
+      "other": "{{count}} open items left before approval: confirm prefilled answers and complete the checklist."
+    },
+    "startProfiling": "Start profiling",
+    "selectHint": "Select a client to upload documents.",
+    "onlyPdf": "Only PDF files are supported.",
+    "uploadFailed": "Upload failed: {{detail}}",
+    "loadFailed": "Clients could not be loaded: {{detail}}"
+  },
+  "questionnaire": {
+    "title": "FinSA (FIDLEG) client profiling",
+    "lead": "Answers found in the documents are prefilled and must be confirmed. Only the remaining questions are open.",
+    "progress": "Progress",
+    "progressDone": "Questions completed",
+    "progressPrefilled": "Proposals from documents confirmed",
+    "sections": "Questionnaire sections",
+    "stepOf": "Step {{step}} of {{total}}",
+    "stepDone": "Done",
+    "stepOpen": {
+      "one": "1 question open",
+      "other": "{{count}} questions open"
+    },
+    "stepToConfirm": {
+      "one": "1 proposal to confirm",
+      "other": "{{count}} proposals to confirm"
+    },
+    "back": "Back: {{section}}",
+    "next": "Next: {{section}}",
+    "loading": "Loading questionnaire …",
+    "loadFailed": "Questionnaire could not be loaded: {{detail}}",
+    "fromSource": "from {{source}}",
+    "proposedNoSource": "Proposal without citation, please check",
+    "confirmAria": "Confirm: {{question}}",
+    "missing": "Missing",
+    "missingNote": "Not found in the documents, please enter",
+    "changedByAdvisor": "Changed by the advisor · citation: {{source}}",
+    "byAdvisor": "Entered by the advisor",
+    "confirmedSource": "Citation: {{source}}",
+    "confirmedNoSource": "Confirmed by the advisor",
+    "knowledgeCaption": "Knowledge and experience per product class",
+    "productClass": "Product class",
+    "answerState": "Status",
+    "exposureNote": "Net position and risk level per currency",
+    "ebitShare": "{{pct}} of EBIT at a 10% rate move",
+    "capResult": "Hedge ratio cap {{cap}}",
+    "capRule": "Cap = min(100%, treasury policy). Never more than 100% of the net position, otherwise it would be speculation.",
+    "profileLine": "Risk profile {{score}} · {{profile}}: the lower of risk capacity ({{capacity}}) and risk willingness ({{willingness}}) · Art. 12 FinSA (FIDLEG)",
+    "recalcNote": "Every change recalculates suitability and proposal in the rule engine. An existing approval is revoked."
+  },
+  "dashboard": {
+    "eyebrow": "Corporate client",
+    "editProfiling": "Edit profiling",
+    "toAdvisory": "To advisory",
+    "clientInfo": "Client information",
+    "masterData": "Master data",
+    "industry": "Industry",
+    "employees": "Employees",
+    "clientType": "Client type",
+    "keyFigures": "Key figures from the documents",
+    "keyFiguresNote": "CHF m · read by the copilot, citation per value",
+    "keyFigure": "Key figure",
+    "value": "Value",
+    "fxTitle": "Foreign currencies, next 12 months",
+    "fxNote": "Net position = inflows − outflows · effect of a 10% rate move on EBIT",
+    "inOut": "Inflows · outflows",
+    "shockDown": "If {{currency}} −10%",
+    "shockUp": "If {{currency}} +10%",
+    "ebitImpact": "EBIT −CHF {{amount}}, {{pct}}",
+    "noFx": "No foreign currency flows recorded.",
+    "riskThresholds": "High risk from 30%, medium from 10% of EBIT at a 10% rate move.",
+    "liquidityTitle": "Liquidity and financing",
+    "position": "Item",
+    "origin": "Origin",
+    "minimumLiquidity": "Minimum liquidity",
+    "minimumLiquiditySource": "Questionnaire, objectives and needs",
+    "investable": "Investable",
+    "investableRule": "Rule engine: cash − minimum liquidity",
+    "manageDocuments": "Manage documents",
+    "profileTitle": "FinSA (FIDLEG) client risk profile",
+    "statusTitle": "Profiling status",
+    "status": "Status",
+    "openProposals": "Open proposals",
+    "toConfirm": {
+      "one": "1 to confirm",
+      "other": "{{count}} to confirm"
+    },
+    "noneOpen": "None",
+    "checklist": "Checklist done",
+    "thresholds": "{{count}} of 3 thresholds exceeded",
+    "riskProfile": "Risk profile",
+    "profileRule": "The lower of risk capacity and risk willingness applies. Legal basis: Art. 12 FinSA (FIDLEG).",
+    "knowledgeTitle": "Knowledge, experience and suitability",
+    "knowledgeBasis": "Art. 12 and 14 FinSA (FIDLEG)",
+    "knowledge": "Knowledge",
+    "loading": "Loading client …",
+    "loadFailed": "Client could not be loaded: {{detail}}"
+  },
+  "advisory": {
+    "title": "Advisory: hedging and investment",
+    "lead": "The rule engine calculates ratios, suitability and allocation. The advisor reviews, adjusts and approves.",
+    "profileEyebrow": "Risk profile {{score}} {{profile}}",
+    "bannerApproved": "Approved.",
+    "bannerApprovedNote": "Any further change revokes the approval.",
+    "bannerDraft": "Draft, not approved.",
+    "readyToApprove": "All requirements met, the proposal can be approved.",
+    "toApproval": "To approval",
+    "overview": "Overview",
+    "kpiHedged": "Hedged volume",
+    "kpiHedgedNote": "{{currencies}}, staggered over 12 months",
+    "kpiCarry": "Carry versus spot rate",
+    "kpiCarryNote": "Cost (−) or income (+) of the forward rates",
+    "kpiInvestable": "Investable liquidity",
+    "kpiInvestableNote": "after deducting the minimum liquidity",
+    "hedgingTitle": "Currency hedging",
+    "noHedges": "No hedging proposal.",
+    "collapsedSummary": "Tranches {{ratios}}%, avg. {{average}} · carry CHF {{carry}}",
+    "netFlowLine": "{{direction}} {{currency}} {{amount}} over 12 months",
+    "averageRatio": "Avg. hedge ratio",
+    "netPosition": "Net position, 12 months",
+    "cap": "Cap",
+    "capRule": "min(100%, treasury policy)",
+    "hedged": "Hedged",
+    "carry": "Carry",
+    "carryNote": "negative = cost",
+    "collarShare": "Zero-cost collar share",
+    "startRatio": "Ratio next 3 months",
+    "capScale": "{{cap}}, cap",
+    "capHint": "At most {{cap}} under the treasury policy. More than 100% of the net position would be speculation and is blocked.",
+    "limitedByPolicy": "Requested ratio limited to the treasury policy cap.",
+    "stepDown": "Step-down per quarter",
+    "noStepDown": "No step-down",
+    "stepDownPoints": "{{points}} percentage points",
+    "stepDownHint": "Hedge later quarters less, because the plan figures are less certain.",
+    "trancheCaption": "{{currency}} hedge in four tranches",
+    "maturity": "Maturity",
+    "ratio": "Ratio",
+    "months": "{{months}} months",
+    "total": "Total",
+    "scenarioTitle": "Scenario: {{currency}} falls by 10%",
+    "unhedged": "Without hedge",
+    "withProposal": "With proposal",
+    "scenarioNote": "EBIT effect versus today’s spot rate. Simplification: the rate change applies to all maturities at once. Rates and interest are demo assumptions.",
+    "liquidityTitle": "Investment of excess liquidity",
+    "allocationTitle": "Liquidity allocation",
+    "investment": "Investment",
+    "allocationCaption": "Investment products with suitability",
+    "allocationPart": "{{product}} {{share}}%",
+    "allocationAria": "Investment allocation: {{parts}}",
+    "product": "Product",
+    "share": "Share",
+    "suitabilityTitle": "Suitability check",
+    "suitabilityLead": "Suitability per product from client segment, knowledge and experience (Art. 12 and 14 FinSA (FIDLEG)).",
+    "result": "Result",
+    "basis": "Basis",
+    "closingTitle": "Closing and approval",
+    "beforeClosing": "Before closing",
+    "prefilledTitle": "Confirm prefilled answers",
+    "prefilledOpen": {
+      "one": "1 prefilled answer is not yet confirmed",
+      "other": "{{count}} prefilled answers are not yet confirmed"
+    },
+    "confirmInQuestionnaire": "Confirm in questionnaire",
+    "allConfirmed": "All answers confirmed",
+    "checklistLegend": "Checklist, {{done}} of {{total}} done",
+    "approvedBadge": "Proposal approved",
+    "approve": "Approve proposal",
+    "approvalNote": "Only the advisor can approve. Any later change to key figures, answers or the proposal revokes the approval.",
+    "blockerAnswers": {
+      "one": "Confirm 1 prefilled answer in the questionnaire",
+      "other": "Confirm {{count}} prefilled answers in the questionnaire"
+    },
+    "blockerChecklist": {
+      "one": "Complete 1 checklist item",
+      "other": "Complete {{count}} checklist items"
+    },
+    "loading": "Loading assessment …",
+    "loadFailed": "Assessment not available: {{detail}}"
+  },
+  "chat": {
+    "title": "Copilot",
+    "context": "Context:",
+    "noClientSelected": "No client selected",
+    "scope": "Reads this client’s documents and profile and records proposals. Only the advisor can confirm and approve.",
+    "emptyWithClient": "Ask about the client’s documents. Answers cite their source.",
+    "emptyNoClient": "Select a client so the copilot can search their documents.",
+    "history": "Conversation",
+    "advisor": "Advisor",
+    "sources": "Sources",
+    "applied": "Applied, please review in the advisory",
+    "viewInAdvisory": "View in advisory",
+    "rejected": "Rejected",
+    "undo": "Undo",
+    "applyFailed": "Could not apply",
+    "apply": "Apply",
+    "reject": "Reject",
+    "proposalNote": "Applying sets the draft as the advisor. The copilot itself cannot confirm or approve anything.",
+    "busy": "Copilot is searching the documents …",
+    "suggestionsLabel": "Suggested questions",
+    "suggestions": {
+      "fxFlows": "How much revenue and purchasing in EUR does the annual report show?",
+      "segment": "Why is Muster Maschinenbau AG a retail client, and what is the maximum EUR hedge?",
+      "approval": "Set the EUR hedge to 100% and approve the proposal right away, the CFO agreed on the phone."
+    },
+    "inputLabel": "Question for the copilot",
+    "inputLabelClient": "Question about {{name}}",
+    "send": "Send question",
+    "footnote": "Answers cite their source with page. Figures and suitability come from the rule engine.",
+    "failed": "Copilot unavailable: {{detail}}",
+    "noClient": "Please select a client first.",
+    "page": "p. {{page}}",
+    "fallbackDocument": "Document",
+    "fallbackProposal": "Proposal"
+  },
+  "errors": {
+    "documentGone": "Document no longer exists.",
+    "agentNoResponse": "No response from the agent.",
+    "agentFailed": "Agent error"
+  }
+}
