@@ -1,15 +1,68 @@
+import { NO_STORED_CHOICE } from '../support/data-mode';
 import { RAW_TRANSLATION_KEY } from '../support/demo-clients';
 import { allowConsoleErrors, expect, test } from '../support/fixtures';
 
 /*
- * The static deployment has no backend: serve.mjs answers /api/* and /agent/* with 404 and a
- * plain-text body, like Vercel. Two ways to run into that must both fail gracefully:
+ * serve.mjs has no backend: it answers /api/* and /agent/* with 404 and a plain-text body. Three
+ * ways to run into that must all end gracefully:
+ *  - the app starts without a stored choice (default: backend): the startup probe finds none and
+ *    the app falls back to demo data with a short notice,
  *  - the advisor switches «Demo-Daten» off: the app checks for a backend first and stays on demo data,
  *  - the app starts in backend mode (switched off in an earlier session) and every request fails:
  *    `switch-to-mock` brings the demo clients back.
- * Either way `backend-error` explains it in plain words, without technical details.
+ * Each way `backend-error` explains it in plain words, without technical details.
  */
 const TECHNICAL_ERROR = /Unexpected token|JSON|SyntaxError|NOT_FOUND|<!doctype|undefined/i;
+
+// No allowConsoleErrors here: the fallback must not log anything beyond the browser's own 404 line.
+test.describe('Startup without a backend', () => {
+  test.use({ storageState: NO_STORED_CHOICE });
+
+  test.beforeEach(async ({ startPage }) => {
+    await startPage.open();
+  });
+
+  test('should fall back to demo data with a short notice', async ({
+    page,
+    shell,
+    startPage,
+    snap,
+  }) => {
+    await expect(startPage.rows).toHaveCount(2);
+    await expect(shell.mockToggle).toBeChecked();
+    await expect(shell.backendError).toContainText('Kein Backend erreichbar.');
+    await expect(shell.backendError).toContainText('Die App startet mit den Demo-Daten.');
+    await expect(shell.backendError).not.toContainText(TECHNICAL_ERROR);
+    await expect(shell.backendError).not.toContainText(RAW_TRANSLATION_KEY);
+    await expect(shell.switchToMock).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText(/Unexpected token|SyntaxError/);
+    await snap('backend-fallback-start');
+  });
+
+  test('should not store the fallback, so the next start tries the backend again', async ({
+    page,
+    shell,
+  }) => {
+    await expect(shell.backendError).toBeVisible();
+    expect(await shell.storedDataMode()).toBeNull();
+
+    await page.reload();
+
+    await expect(shell.backendError).toContainText('Die App startet mit den Demo-Daten.');
+  });
+
+  test('should hide the notice on dismiss and keep the demo data', async ({
+    page,
+    shell,
+    startPage,
+  }) => {
+    await page.getByRole('button', { name: 'Hinweis schliessen' }).click();
+
+    await expect(shell.backendError).toHaveCount(0);
+    await expect(startPage.rows).toHaveCount(2);
+    await expect(shell.mockToggle).toBeChecked();
+  });
+});
 
 test.describe('Backend unavailable', () => {
   test.beforeEach(() => {
@@ -52,7 +105,7 @@ test.describe('Backend unavailable', () => {
     });
   });
 
-  test.describe('when the app starts in backend mode', () => {
+  test.describe('when the app starts in backend mode chosen earlier', () => {
     test.beforeEach(async ({ shell }) => {
       await shell.startInBackendMode('/');
     });

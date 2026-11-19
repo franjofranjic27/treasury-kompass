@@ -10,8 +10,9 @@ import {
 } from './models';
 
 /**
- * Single data access abstraction for all screens. Implemented by an in-memory mock
- * (static Vercel deployment) and an HTTP client for treasury-service and agent-service.
+ * Single data access abstraction for all screens. Implemented by an in-memory mock (demo data,
+ * also the fallback when no backend answers) and an HTTP client for treasury-service and
+ * agent-service.
  */
 export abstract class TreasuryApi {
   abstract listClients(query: string): Promise<readonly ClientSummary[]>;

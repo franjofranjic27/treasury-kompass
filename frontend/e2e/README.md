@@ -14,7 +14,7 @@ npx playwright install chromium
 ## Run
 
 ```bash
-npm test                          # mock projects: production build, «Demo-Daten» on, 1440×900 and 1280×720
+npm test                          # mock projects: production build, no backend, 1440×900 and 1280×720
 npx playwright test --project=mock-1440            # one viewport only
 npx playwright test tests/chat.spec.ts             # one spec
 npm run test:headed               # watch it click (one worker)
@@ -25,17 +25,22 @@ E2E_SKIP_BUILD=1 npm test         # reuse ../dist instead of building again
 
 Before the tests, the web server builds the app (`npm --prefix .. run build`, after `npm --prefix .. ci`
 if `../node_modules` is missing) and serves `../dist/treasury-kompass/browser` with `serve.mjs` on
-port 4400 (`E2E_PORT` to change). `serve.mjs` mimics the Vercel deployment: static files, SPA fallback
-to `index.html` for app routes, and `/api/*` and `/agent/*` answered with a plain-text 404.
+port 4400 (`E2E_PORT` to change). `serve.mjs` is a static server without a backend: static files, SPA
+fallback to `index.html` for app routes, and `/api/*` and `/agent/*` answered with a plain-text 404.
+
+The app starts on the real backend by default and falls back to demo data if the startup probe
+(`GET /api/me`) finds none. To keep the mock projects deterministic, their browser storage presets
+«Demo-Daten» as chosen in an earlier session (`support/data-mode.ts`); only the startup tests in
+`backend-unavailable.spec.ts` clear it.
 
 ### Against the real stack
 
 Opt-in, only when `E2E_STACK_URL` is set. Runs the tests tagged `@stack` with «Demo-Daten» off
-against the docker-compose gateway. The gateway serves the same `../dist` folder, which the web
-server builds first, so the stack tests the current frontend code.
+(the default of a fresh browser) against the docker-compose gateway. The gateway serves the same
+`../dist` folder, which the web server builds first, so the stack tests the current frontend code.
 
 ```bash
-docker compose up -d              # from the repo root; gateway on http://localhost:8088
+docker compose up -d --build      # from the repo root; gateway on http://localhost:8088
 cd frontend/e2e
 E2E_STACK_URL=http://localhost:8088 npx playwright test --project=stack
 ```
@@ -62,6 +67,7 @@ All three are git-ignored.
 | `support/fixtures.ts`     | `test` with page objects, `snap()` and a guard that fails a test on console errors                                |
 | `support/demo-clients.ts` | Expected values of the demo clients (`docs/regelwerk.md` section 9) and chat cases                                |
 | `support/flows.ts`        | Multi-screen flows, e.g. preparing a case for approval                                                            |
+| `support/data-mode.ts`    | Storage key and browser storage states of the «Demo-Daten» choice                                                 |
 
 The mock backend keeps its state only until the next full page load. Flows across screens therefore
 navigate with in-app links, never with `page.goto`.

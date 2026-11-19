@@ -58,7 +58,7 @@ flowchart TB
 
 | Container | Technik | Port (Host) | Verantwortung |
 | --- | --- | --- | --- |
-| `gateway` | nginx 1.30.6 | 8088 | Eine Origin für SPA, `/api/**` und `/agent/**`. Sperrt `/internal/**` und `/actuator/**`. Liefert später das gebaute Frontend aus. |
+| `gateway` | nginx 1.30.6 | 8088 | Eine Origin für SPA, `/api/**` und `/agent/**`. Sperrt `/internal/**` und `/actuator/**`. Liefert das gebaute Frontend aus (`frontend/dist/treasury-kompass/browser`). |
 | `treasury-service` | Kotlin 2.3.21, Spring Boot 4.1.2, Java 21 | 8080 | Kunden, Unterlagen (PDF-Bytes), Fragebogen, Regelwerk, Absicherung, Liquidität, Checkliste, Freigabe, Protokoll, Audit-Trail |
 | `agent-service` | Python 3.12, FastAPI, LangChain 1.x | 8000 | Ingest (Parsing, Chunking, Embeddings), Extraktion mit Fundstellen, Chat-Agent mit Tools, Begründungsentwurf, Gesprächsverlauf |
 | `postgres` | PostgreSQL 17, pgvector 0.8.7 | 5432 | Schema `treasury` (Flyway, Rolle `treasury_app`), Schema `rag` (Rolle `agent_app`) |
@@ -626,7 +626,7 @@ treasury-kompass/
 │   └── agent-service/         pyproject.toml, uv.lock, .python-version (3.12), Dockerfile
 │       ├── app/…
 │       └── tests/
-├── frontend/                  Angular 21 Workspace (später), proxy.conf.json
+├── frontend/                  Angular 21 Workspace, proxy.conf.json
 ├── infra/
 │   ├── postgres/init/01-roles-and-schemas.sh   Rollen, Schemas, CREATE EXTENSION vector
 │   └── gateway/nginx.conf
@@ -680,8 +680,8 @@ Dockerfiles: treasury-service mehrstufig, Build in `eclipse-temurin:21.0.13_9-jd
 | Nur Datenbank | `docker compose up -d postgres` |
 | treasury-service | `cd services/treasury-service && ./gradlew bootRun` (läuft mit lokalem JDK 17; Gradle lädt JDK 21 einmalig über foojay) |
 | agent-service | `cd services/agent-service && uv sync && uv run uvicorn app.main:app --reload --port 8000` |
-| Ganzer Stack | `docker compose up --build`, dann `http://localhost:8088` (API unter `/api`, Agent unter `/agent`) |
-| Frontend (später) | `cd frontend && npm ci && npx ng serve --proxy-config proxy.conf.json` → `http://localhost:4200` |
+| Ganzer Stack | `cd frontend && npm ci && npm run build`, dann im Repo-Root `docker compose up -d --build` und `http://localhost:8088` (API unter `/api`, Agent unter `/agent`). Nach einem neuen Frontend-Build `docker compose up -d --force-recreate gateway` |
+| Frontend | `cd frontend && npm ci && npm start` (`ng serve` mit `proxy.conf.json`) → `http://localhost:4200` |
 | Tests | `./gradlew test` (Testcontainers mit `pgvector/pgvector:0.8.7-pg17-trixie`, Docker nötig) · `uv run pytest` |
 | API-Doku | Swagger UI des treasury-service unter `http://localhost:8080/swagger-ui.html` (springdoc), agent-service unter `http://localhost:8000/docs` |
 
@@ -757,6 +757,7 @@ Anthropic-spezifisch für `claude-opus-5-5` (gilt für `ChatAnthropic`):
 | 19 | OpenAPI-YAML unter `docs/api/` ist der Vertrag (design-first); Controller von Hand, springdoc nur für Swagger UI | Code-Generierung aus YAML | Weniger Build-Komplexität. Das Frontend generiert seinen Client aus dem YAML. |
 | 20 | Opting-out wird für Firmenkunden nicht angeboten | Opting-out zum professionellen oder institutionellen Kunden | Art. 5 Abs. 1 FIDLEG gilt für vermögende Privatkunden und private Anlagestrukturen, nicht für operative Unternehmen. Opting-out von Unternehmen mit professioneller Tresorerie zum institutionellen Kunden (Art. 5 Abs. 3) ist ausserhalb der Zielgruppe. Mit Compliance prüfen. |
 | 21 | Regelwerk als Gradle-Subprojekt `rules` (reines Kotlin/JVM), App als Root-Projekt mit `project(":rules")` | Paket `rules` im App-Modul; eigener Service | Compile-Zeit-Garantie für INV-1 (keine Framework-Abhängigkeit möglich), parallele Arbeit an App und Regelwerk ohne gemeinsame Dateien. Ein eigener Service brächte nur Latenz und Betrieb. |
+| 22 | Nur lokaler Betrieb über Docker Compose; das Frontend startet mit dem Backend und fällt auf Demo-Daten zurück, wenn beim Start keines antwortet | Statisches Frontend auf Vercel mit Demo-Daten als Standard | Vercel-Hosting verworfen, nur lokal. Ohne Backend zeigte das statische Frontend nur Demo-Daten; lokal läuft der ganze Stack hinter einer Origin (ADR-17). |
 
 ## 18. Offene Punkte
 

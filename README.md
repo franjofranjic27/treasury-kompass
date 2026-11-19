@@ -2,7 +2,7 @@
 
 Copilot für Firmenkundenberater: Aus der Jahresrechnung eines Firmenkunden entsteht ein FIDLEG-konformer Absicherungs- und Anlagevorschlag mit Beratungsprotokoll.
 
-Hackathon-Projekt. Stand: klickbarer Prototyp mit Beispieldaten, noch keine Services.
+Hackathon-Projekt. Läuft nur lokal mit Docker Compose, es gibt kein Hosting.
 
 ## Use-Case in Kürze
 
@@ -32,9 +32,10 @@ Hackathon-Projekt. Stand: klickbarer Prototyp mit Beispieldaten, noch keine Serv
 Voraussetzungen: Docker mit Compose v2, für die Services ohne Docker zusätzlich JDK 17+ und [uv](https://docs.astral.sh/uv/).
 
 ```bash
-cp .env.example .env          # Passwörter und API-Schlüssel eintragen, .env wird nicht eingecheckt
-docker compose up --build     # postgres, treasury-service, agent-service, gateway
-open http://localhost:8088    # Gateway: Frontend, /api → treasury-service, /agent → agent-service
+cp .env.example .env                        # Passwörter und API-Schlüssel eintragen, .env wird nicht eingecheckt
+(cd frontend && npm ci && npm run build)    # das Gateway liefert frontend/dist/treasury-kompass/browser aus
+docker compose up -d --build                # postgres, treasury-service, agent-service, gateway
+open http://localhost:8088                  # Gateway: Frontend, /api → treasury-service, /agent → agent-service
 ```
 
 | Dienst | Adresse (nur 127.0.0.1) |
@@ -44,6 +45,8 @@ open http://localhost:8088    # Gateway: Frontend, /api → treasury-service, /a
 | agent-service | `http://localhost:8000`, API-Doku unter `/docs` |
 | PostgreSQL 17 mit pgvector | `localhost:5432` (`POSTGRES_PORT`), Datenbank `treasury_kompass` |
 
+- Das Frontend arbeitet mit dem echten Backend. Antwortet beim Start keines, zeigt es die Demo-Daten mit einem Hinweis; der Schalter «Demo-Daten» im Header wechselt von Hand (`frontend/README.md`).
+- Nach einem neuen Frontend-Build: `docker compose up -d --force-recreate gateway`. Frontend-Entwicklung mit `ng serve` und `proxy.conf.json` auf http://localhost:4200: `cd frontend && npm start`.
 - Nur die Datenbank: `docker compose up -d postgres`, dann die Services lokal starten (`docs/architecture.md`, Abschnitt 15).
 - Beim ersten Start legt `infra/postgres/init/01-roles-and-schemas.sh` die Rollen `treasury_app` und `agent_app` mit den Schemas `treasury` und `rag` an. Passwörter in `.env` ändern wirkt erst nach `docker compose down -v` (oder das Skript per `docker compose exec postgres /docker-entrypoint-initdb.d/01-roles-and-schemas.sh` erneut ausführen).
 - `AGENT_DB_PASSWORD` steht in der Datenbank-URL des agent-service und darf nur URL-sichere Zeichen enthalten, z.B. `openssl rand -hex 24`. `INTERNAL_API_KEY` mit `openssl rand -hex 32` erzeugen.

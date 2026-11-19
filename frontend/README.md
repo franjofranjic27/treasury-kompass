@@ -1,13 +1,17 @@
 # Treasury Kompass – Frontend
 
-- Lokal: `npm install && npm start` (HTTP gegen `/api` → :8080 und `/agent` → :8000, siehe `proxy.conf.json`; Header-Schalter «Demo-Daten» nutzt Mock-Daten).
-- Build: `npm run build` (Produktions-Build nutzt Mock-Daten, Ausgabe `dist/treasury-kompass/browser`).
-- Vercel: Projekt importieren, Root Directory `frontend`, Einstellungen kommen aus `vercel.json`. Die SPA-Rewrite-Regel lässt `/api/…` und `/agent/…` aus, dort antwortet Vercel mit 404 statt mit `index.html`.
+Die App läuft nur lokal, es gibt kein Hosting.
 
-## Verhalten ohne Backend
+## Starten
 
-- Wer «Demo-Daten» ausschaltet, löst zuerst `GET /api/me` aus. Antwortet kein Backend mit JSON, bleibt die App im Demo-Modus und zeigt einen Hinweis.
-- Im HTTP-Modus werden Netzwerkfehler, 5xx und Antworten ohne JSON (z.B. eine HTML-Seite) zu `BackendUnavailableError`. Die App zeigt dann ein Banner mit «Zu Demo-Daten wechseln», nie einen Parser-Fehler.
+- Ganzer Stack: einmal `npm ci && npm run build` (Ausgabe `dist/treasury-kompass/browser`), dann im Repo-Root `docker compose up -d --build` und http://localhost:8088 öffnen. Das Gateway liefert den Build aus und leitet `/api` an den treasury-service und `/agent` an den agent-service. Nach einem neuen Build `docker compose up -d --force-recreate gateway`: Der Build legt den Ordner neu an, und je nach Docker-Version hängt der Bind-Mount sonst noch am alten.
+- Entwicklung: `npm ci && npm start` (`ng serve` auf http://localhost:4200). `proxy.conf.json` leitet `/api` → :8080 und `/agent` → :8000, die Services laufen dafür in Compose oder lokal.
+
+## Datenmodus
+
+- Standard ist das echte Backend. Beim Start fragt die App `GET /api/me` ab (5 s Timeout). Antwortet kein Backend mit JSON, startet sie mit den Demo-Daten und zeigt einen Hinweis, der sich schliessen lässt. Dieser Rückfall wird nicht gespeichert, der nächste Start versucht es wieder mit dem Backend.
+- Der Header-Schalter «Demo-Daten» speichert die Wahl in `localStorage` und geht dem Standard vor. Wer ihn ausschaltet, löst zuerst `GET /api/me` aus. Antwortet kein Backend mit JSON, bleibt die App im Demo-Modus und zeigt einen Hinweis.
+- Im HTTP-Modus werden Netzwerkfehler, 5xx und Antworten ohne JSON (z.B. eine HTML-Seite) zu `BackendUnavailableError`. Die App zeigt dann ein Banner mit «Zu Demo-Daten wechseln», nie einen Parser-Fehler. Das gilt auch, wenn das Backend während der Sitzung ausfällt oder die gespeicherte Wahl «Backend» auf keines trifft.
 
 ## Layout und Chat
 

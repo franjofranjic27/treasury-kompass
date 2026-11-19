@@ -402,6 +402,7 @@
     "switchToMock": "Zu Demo-Daten wechseln",
     "probeFailedTitle": "Kein Backend erreichbar.",
     "probeFailedText": "Die App bleibt bei den Demo-Daten.",
+    "startupFallbackText": "Die App startet mit den Demo-Daten.",
     "dismiss": "Hinweis schliessen"
   },
   "errors": {

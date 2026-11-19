@@ -4,8 +4,9 @@ import { BackendNoticeKind, DataMode } from '../core/data-mode';
 import { Icon } from '../shared/icon';
 
 /**
- * Shell-wide notice about the backend: either a live request found none (with the way out to demo
- * data), or the probe before leaving demo mode failed. Rendered once, above the routed screen.
+ * Shell-wide notice about the backend: a live request found none (with the way out to demo data),
+ * or a probe found none and the app shows demo data, at startup or after the advisor tried to leave
+ * demo mode. Rendered once, above the routed screen.
  */
 @Component({
   selector: 'app-backend-notice',
@@ -33,7 +34,11 @@ import { Icon } from '../shared/icon';
         <app-icon name="info" />
         <span>
           <b>{{ 'backend.probeFailedTitle' | translate }}</b>
-          {{ 'backend.probeFailedText' | translate }}
+          @if (notice() === 'startupFallback') {
+            {{ 'backend.startupFallbackText' | translate }}
+          } @else {
+            {{ 'backend.probeFailedText' | translate }}
+          }
         </span>
         <button class="btn-link" type="button" (click)="dataMode.dismissNotice()">
           {{ 'backend.dismiss' | translate }}

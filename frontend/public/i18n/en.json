@@ -402,6 +402,7 @@
     "switchToMock": "Switch to demo data",
     "probeFailedTitle": "No backend reachable.",
     "probeFailedText": "The app stays on demo data.",
+    "startupFallbackText": "The app starts with demo data.",
     "dismiss": "Dismiss notice"
   },
   "errors": {

@@ -1,13 +1,15 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+import { demoModeStorageState } from './support/data-mode';
 
 /**
  * Two kinds of runs:
- *  - `mock-*` (default): the production build with «Demo-Daten» on, served by serve.mjs on port 4400.
- *    Deterministic, no backend; /api and /agent answer 404 like the static Vercel deployment.
+ *  - `mock-*` (default): the production build served by serve.mjs on port 4400, without a
+ *    backend (/api and /agent answer 404). The browser starts with «Demo-Daten» chosen, so the
+ *    tests never depend on the startup probe; tests of the startup fallback clear that choice.
  *  - `stack` (opt-in): only when E2E_STACK_URL is set, e.g. http://localhost:8088 (docker-compose gateway).
- *    Runs the tests tagged @stack against the real backend with «Demo-Daten» switched off.
+ *    Runs the tests tagged @stack against the real backend (the default without a stored choice).
  *
  * The web server always builds the app first. The compose gateway serves the same dist folder,
  * so a stack run also tests the current frontend code. E2E_SKIP_BUILD=1 reuses an existing build,
@@ -26,6 +28,7 @@ const build = process.env.E2E_SKIP_BUILD || dist ? '' : `${install}npm --prefix 
 const root = dist ? ` --root "${dist}"` : '';
 
 const desktop = devices['Desktop Chrome'];
+const mock = { ...desktop, baseURL: MOCK_URL, storageState: demoModeStorageState(MOCK_URL) };
 
 export default defineConfig({
   testDir: './tests',
@@ -53,12 +56,12 @@ export default defineConfig({
     {
       name: 'mock-1440',
       grepInvert: /@stack/,
-      use: { ...desktop, baseURL: MOCK_URL, viewport: { width: 1440, height: 900 } },
+      use: { ...mock, viewport: { width: 1440, height: 900 } },
     },
     {
       name: 'mock-1280',
       grepInvert: /@stack/,
-      use: { ...desktop, baseURL: MOCK_URL, viewport: { width: 1280, height: 720 } },
+      use: { ...mock, viewport: { width: 1280, height: 720 } },
     },
     ...(STACK_URL
       ? [

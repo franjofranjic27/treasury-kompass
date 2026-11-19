@@ -2,14 +2,14 @@ import { CHAT_CASES, MUSTER, RAW_MARKDOWN } from '../support/demo-clients';
 import { expect, test } from '../support/fixtures';
 
 /*
- * Opt-in smoke run against the real stack (docker-compose gateway, E2E_STACK_URL), «Demo-Daten» off.
+ * Opt-in smoke run against the real stack (docker-compose gateway, E2E_STACK_URL), «Demo-Daten» off:
+ * the default of a fresh browser, switched off first if a stored choice says otherwise.
  * The tests only read, except for exactly one chat question, because every question calls the paid LLM.
  * Client ids come from the backend, so the tests navigate by client name.
  */
 test.describe('Real backend', { tag: '@stack' }, () => {
   test.beforeEach(async ({ shell, startPage }) => {
-    await shell.open('/');
-    await shell.leaveDemoMode();
+    await shell.openOnBackend();
     await expect(startPage.rows.first()).toBeVisible({ timeout: 30_000 });
   });
 

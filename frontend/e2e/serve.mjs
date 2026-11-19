@@ -1,6 +1,6 @@
-// Serves the production build like the Vercel deployment does:
+// Serves the production build as a static SPA without a backend:
 //  - existing files from dist/treasury-kompass/browser,
-//  - /api/* and /agent/* answered with 404 and a non-JSON body (no backend on the static deployment),
+//  - /api/* and /agent/* answered with 404 and a non-JSON body (no backend behind them),
 //  - every other path without a file extension falls back to index.html (SPA routes),
 //  - a missing file with an extension is a 404, so a broken asset reference shows up in the tests.
 //
@@ -42,7 +42,7 @@ const CONTENT_TYPES = {
 
 const BACKEND_PREFIXES = ['/api/', '/agent/'];
 
-/** Vercel answers unknown paths with a plain-text NOT_FOUND page, not with JSON. */
+/** A plain-text error page, not JSON: what the app must never mistake for a backend answer. */
 function notFound(res) {
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end('The page could not be found\n\nNOT_FOUND\n');

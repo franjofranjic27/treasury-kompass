@@ -81,7 +81,7 @@ import { ChatPanel } from './shell/chat-panel';
           <input
             type="checkbox"
             data-testid="mock-toggle"
-            [checked]="dataMode.useMock"
+            [checked]="dataMode.useMock()"
             [disabled]="dataMode.probing()"
             (change)="toggleMock($event)"
           />

@@ -1,4 +1,5 @@
 import { type Locator, type Page, expect } from '@playwright/test';
+import { DATA_MODE_STORAGE_KEY } from '../data-mode';
 
 export type UiLanguage = 'de' | 'en';
 
@@ -36,6 +37,16 @@ export class AppShell {
   }
 
   /**
+   * Opens «/» on the real backend. Without a stored choice that is the app's default; a browser
+   * that chose demo data earlier switches «Demo-Daten» off first.
+   */
+  async openOnBackend(): Promise<void> {
+    await this.open('/');
+    // The data mode is settled before the first render, so the box already shows the final state.
+    if (await this.mockToggle.isChecked()) await this.leaveDemoMode();
+  }
+
+  /**
    * Switches «Demo-Daten» off with a reachable backend: the app reloads on «/» in HTTP mode.
    * Without a backend there is no reload; use {@link mockToggle} directly for that case.
    */
@@ -47,15 +58,23 @@ export class AppShell {
     await expect(this.heading).toBeVisible();
   }
 
-  /** Starts the app in HTTP mode, as if «Demo-Daten» had been switched off in an earlier session. */
+  /**
+   * Starts the app in HTTP mode, as if «Demo-Daten» had been switched off in an earlier session.
+   * A stored choice skips the startup probe, so the app stays on the backend even without one.
+   */
   async startInBackendMode(path = '/'): Promise<void> {
-    await this.page.addInitScript(() => {
+    await this.page.addInitScript((key) => {
       if (!sessionStorage.getItem('e2e.modeSet')) {
-        localStorage.setItem('treasury-kompass.useMock', 'false');
+        localStorage.setItem(key, 'false');
         sessionStorage.setItem('e2e.modeSet', 'true');
       }
-    });
+    }, DATA_MODE_STORAGE_KEY);
     await this.page.goto(path);
+  }
+
+  /** The stored «Demo-Daten» choice: `'true'` demo data, `'false'` backend, null if none. */
+  async storedDataMode(): Promise<string | null> {
+    return this.page.evaluate((key) => localStorage.getItem(key), DATA_MODE_STORAGE_KEY);
   }
 
   /** Height of the document beyond the viewport; 0 means the document itself cannot scroll. */
