@@ -33,6 +33,19 @@ test.describe('Real backend', { tag: '@stack' }, () => {
     await snap('stack-dashboard');
   });
 
+  test('should show the key figures and EUR flows of Muster Maschinenbau AG with their source', async ({
+    startPage,
+    dashboard,
+  }) => {
+    await startPage.select(MUSTER.name);
+    await startPage.link('Zum Dashboard').click();
+
+    const totalAssets = dashboard.figureRow('Bilanzsumme');
+    await expect(totalAssets).toContainText(MUSTER.figures.totalAssets, { timeout: 30_000 });
+    await expect(totalAssets).toContainText('Bilanz, S. 4');
+    await expect(dashboard.fx).toContainText('EUR 18.7 Mio. · 4.5 Mio.');
+  });
+
   test('should show the hedge proposal within the policy cap', async ({
     page,
     startPage,
@@ -63,9 +76,14 @@ test.describe('Real backend', { tag: '@stack' }, () => {
   }) => {
     await startPage.select(MUSTER.name);
     await startPage.link('Zum Dashboard').click();
-    const approval = dashboard.masterData.getByText('Freigabe', { exact: true }).locator('..');
+    // The value next to «Freigabe»; compared as text content, since innerText adds a line break after the label.
+    const approval = dashboard.masterData
+      .getByText('Freigabe', { exact: true })
+      .locator('..')
+      .locator('dd');
     await expect(approval).toBeVisible({ timeout: 30_000 });
-    const approvalBefore = await approval.innerText();
+    const approvalBefore = (await approval.textContent())?.trim() ?? '';
+    expect(approvalBefore).not.toBe('');
 
     await chat.input.fill(CHAT_CASES.approval);
     await chat.sendButton.click();

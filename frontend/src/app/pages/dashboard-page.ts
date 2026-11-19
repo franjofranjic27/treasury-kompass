@@ -9,6 +9,7 @@ import { TreasuryApi } from '../core/treasury-api';
 import { Badge } from '../shared/badge';
 import { CaseNav } from '../shared/case-nav';
 import { Icon } from '../shared/icon';
+import { FigureSource } from '../shared/figure-source';
 import { FactorList } from '../shared/score';
 import { ScrollRegion } from '../shared/scroll-region';
 import { DOCUMENT_TONE, RISK_TONE, SUITABILITY_TONE, inlineError, plural } from './labels';
@@ -31,6 +32,7 @@ interface CurrencyBlock {
     CaseNav,
     Icon,
     FactorList,
+    FigureSource,
     ScrollRegion,
   ],
   styleUrl: './dashboard-page.scss',
@@ -108,7 +110,7 @@ interface CurrencyBlock {
                     <tr>
                       <td>{{ 'figure.' + f.key | translate }}</td>
                       <td class="num strong">{{ f.value | num: 1 }}</td>
-                      <td class="src">{{ f.source ?? ('common.dash' | translate) }}</td>
+                      <td class="src"><app-figure-source [figure]="f" /></td>
                     </tr>
                   }
                 </tbody>
@@ -169,7 +171,7 @@ interface CurrencyBlock {
                   }
                   <div>
                     <dt>{{ 'common.citation' | translate }}</dt>
-                    <dd>{{ fx.source ?? ('common.dash' | translate) }}</dd>
+                    <dd><app-figure-source [figure]="fx" /></dd>
                   </div>
                 </dl>
               </div>
@@ -195,23 +197,22 @@ interface CurrencyBlock {
                     </tr>
                   </thead>
                   <tbody>
+                    @let cash = figure('fin.cash');
+                    @let minimum = c.minimumLiquidity ?? missingFigure('goals.minimumLiquidity');
+                    @let debt = figure('fin.floatingRateDebt');
                     <tr>
                       <td>
                         {{ 'figure.fin.cash' | translate }}
-                        <span class="meta block">{{
-                          figure('fin.cash')?.source ?? ('common.dash' | translate)
-                        }}</span>
+                        <span class="meta block"><app-figure-source [figure]="cash" /></span>
                       </td>
-                      <td class="num strong">{{ figure('fin.cash')?.value | chf }}</td>
+                      <td class="num strong">{{ cash.value | chf }}</td>
                     </tr>
                     <tr>
                       <td>
                         {{ 'dashboard.minimumLiquidity' | translate }}
-                        <span class="meta block">{{
-                          'dashboard.minimumLiquiditySource' | translate
-                        }}</span>
+                        <span class="meta block"><app-figure-source [figure]="minimum" /></span>
                       </td>
-                      <td class="num strong">{{ c.minimumLiquidity | chf }}</td>
+                      <td class="num strong">{{ minimum.value | chf }}</td>
                     </tr>
                     <tr>
                       <td>
@@ -223,11 +224,9 @@ interface CurrencyBlock {
                     <tr>
                       <td>
                         {{ 'figure.fin.floatingRateDebt' | translate }}
-                        <span class="meta block">{{
-                          figure('fin.floatingRateDebt')?.source ?? ('common.dash' | translate)
-                        }}</span>
+                        <span class="meta block"><app-figure-source [figure]="debt" /></span>
                       </td>
-                      <td class="num strong">{{ figure('fin.floatingRateDebt')?.value | chf }}</td>
+                      <td class="num strong">{{ debt.value | chf }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -445,8 +444,10 @@ export class DashboardPage {
     });
   }
 
-  protected figure(key: string): KeyFigure | null {
-    return this.client()?.figures.find((f) => f.key === key) ?? null;
+  protected readonly missingFigure = missingFigure;
+
+  protected figure(key: string): KeyFigure {
+    return this.client()?.figures.find((f) => f.key === key) ?? missingFigure(key);
   }
 
   protected currencyBlocks(): readonly CurrencyBlock[] {
@@ -479,4 +480,8 @@ export class DashboardPage {
       this.assessmentError.set(inlineError(e));
     }
   }
+}
+
+function missingFigure(key: string): KeyFigure {
+  return { key, value: null, status: 'MISSING', origin: null, source: null };
 }

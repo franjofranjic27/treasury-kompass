@@ -15,10 +15,8 @@ import { ScrollRegion } from '../shared/scroll-region';
 import { HedgeCard, HedgeSettingsChange } from './advisory/hedge-card';
 import { SUITABILITY_TONE, inlineError, plural } from './labels';
 
-interface Blocker {
-  readonly key: string;
-  readonly count: number;
-}
+/** Counted blockers are worded by the UI; the backend's further blockers arrive worded. */
+type Blocker = { readonly key: string; readonly count: number } | { readonly text: string };
 
 @Component({
   selector: 'app-beratung-page',
@@ -341,6 +339,7 @@ export class BeratungPage {
           ]
         : []),
       ...(open ? [{ key: plural('advisory.blockerChecklist', open), count: open }] : []),
+      ...a.otherBlockers.map((text) => ({ text })),
     ];
   });
 
@@ -370,7 +369,7 @@ export class BeratungPage {
   /** Blockers as one sentence; re-evaluated on every change detection, so it follows the language. */
   protected blockerText(): string {
     return this.blockers()
-      .map((b) => this.translate.instant(b.key, { count: b.count }))
+      .map((b) => ('text' in b ? b.text : this.translate.instant(b.key, { count: b.count })))
       .join(' · ');
   }
 

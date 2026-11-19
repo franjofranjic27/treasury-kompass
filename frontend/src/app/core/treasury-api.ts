@@ -5,6 +5,7 @@ import {
   ClientDocument,
   ClientSummary,
   HedgeSettings,
+  Question,
   Questionnaire,
 } from './models';
 
@@ -22,7 +23,8 @@ export abstract class TreasuryApi {
     onUpdate: (document: ClientDocument) => void,
   ): Promise<void>;
   abstract getQuestionnaire(clientId: string): Promise<Questionnaire>;
-  abstract setAnswer(clientId: string, key: string, value: string): Promise<void>;
+  /** Sets the answer as the advisor; the question's type decides how the value is sent. */
+  abstract setAnswer(clientId: string, question: Question, value: string): Promise<void>;
   abstract confirmAnswer(clientId: string, key: string): Promise<void>;
   abstract getAssessment(clientId: string): Promise<Assessment>;
   abstract setHedgeSettings(

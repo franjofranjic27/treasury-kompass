@@ -13,7 +13,7 @@ import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { CurrentClient } from '../core/current-client';
 import { ClockPipe } from '../core/format';
-import { ChatEvent, ChatProposal, Citation } from '../core/models';
+import { ChatEvent, ChatProposal, Citation, HedgeDraft } from '../core/models';
 import { RefreshBus } from '../core/refresh-bus';
 import { TreasuryApi } from '../core/treasury-api';
 import { errorText } from '../pages/labels';
@@ -123,54 +123,68 @@ const FOLLOW_THRESHOLD_PX = 80;
                       <span class="tag-proposal">{{ 'common.proposal' | translate }}</span>
                     </div>
                     <p class="body-sm">{{ p.detail }}</p>
-                    @switch (m.proposalState) {
-                      @case ('applied') {
-                        <div class="proposal-actions" role="status">
-                          <app-badge tone="ok">{{ 'chat.applied' | translate }}</app-badge>
-                          @if (currentClient.id(); as clientId) {
-                            <a class="btn-link" [routerLink]="['/clients', clientId, 'beratung']">{{
-                              'chat.viewInAdvisory' | translate
-                            }}</a>
-                          }
-                        </div>
-                      }
-                      @case ('rejected') {
-                        <div class="proposal-actions" role="status">
-                          <app-badge tone="neutral">{{ 'chat.rejected' | translate }}</app-badge>
-                          <button
-                            class="btn-link"
-                            type="button"
-                            (click)="setProposalState($index, 'open')"
-                          >
-                            {{ 'chat.undo' | translate }}
-                          </button>
-                        </div>
-                      }
-                      @case ('failed') {
-                        <div class="proposal-actions" role="status">
-                          <app-badge tone="crit">{{ 'chat.applyFailed' | translate }}</app-badge>
-                        </div>
-                      }
-                      @default {
+                    @if (p.kind === 'answer') {
+                      @if (currentClient.id(); as clientId) {
                         <div class="proposal-actions">
-                          <button
-                            class="btn btn-primary"
-                            type="button"
-                            (click)="applyProposal($index, p)"
-                          >
-                            {{ 'chat.apply' | translate }}
-                          </button>
-                          <button
+                          <a
                             class="btn-link"
-                            type="button"
-                            (click)="setProposalState($index, 'rejected')"
+                            [routerLink]="['/clients', clientId, 'profilierung']"
+                            >{{ 'chat.reviewInQuestionnaire' | translate }}</a
                           >
-                            {{ 'chat.reject' | translate }}
-                          </button>
                         </div>
                       }
+                    } @else {
+                      @switch (m.proposalState) {
+                        @case ('applied') {
+                          <div class="proposal-actions" role="status">
+                            <app-badge tone="ok">{{ 'chat.applied' | translate }}</app-badge>
+                            @if (currentClient.id(); as clientId) {
+                              <a
+                                class="btn-link"
+                                [routerLink]="['/clients', clientId, 'beratung']"
+                                >{{ 'chat.viewInAdvisory' | translate }}</a
+                              >
+                            }
+                          </div>
+                        }
+                        @case ('rejected') {
+                          <div class="proposal-actions" role="status">
+                            <app-badge tone="neutral">{{ 'chat.rejected' | translate }}</app-badge>
+                            <button
+                              class="btn-link"
+                              type="button"
+                              (click)="setProposalState($index, 'open')"
+                            >
+                              {{ 'chat.undo' | translate }}
+                            </button>
+                          </div>
+                        }
+                        @case ('failed') {
+                          <div class="proposal-actions" role="status">
+                            <app-badge tone="crit">{{ 'chat.applyFailed' | translate }}</app-badge>
+                          </div>
+                        }
+                        @default {
+                          <div class="proposal-actions">
+                            <button
+                              class="btn btn-primary"
+                              type="button"
+                              (click)="applyProposal($index, p)"
+                            >
+                              {{ 'chat.apply' | translate }}
+                            </button>
+                            <button
+                              class="btn-link"
+                              type="button"
+                              (click)="setProposalState($index, 'rejected')"
+                            >
+                              {{ 'chat.reject' | translate }}
+                            </button>
+                          </div>
+                        }
+                      }
+                      <p class="meta">{{ 'chat.proposalNote' | translate }}</p>
                     }
-                    <p class="meta">{{ 'chat.proposalNote' | translate }}</p>
                   </article>
                 }
               </li>
@@ -292,7 +306,7 @@ export class ChatPanel {
     void this.send(this.translate.instant(key));
   }
 
-  protected async applyProposal(index: number, proposal: ChatProposal): Promise<void> {
+  protected async applyProposal(index: number, proposal: HedgeDraft): Promise<void> {
     const clientId = this.currentClient.id();
     if (!clientId) return;
     try {

@@ -250,7 +250,6 @@
     "position": "Item",
     "origin": "Origin",
     "minimumLiquidity": "Minimum liquidity",
-    "minimumLiquiditySource": "Questionnaire, objectives and needs",
     "investable": "Investable",
     "investableRule": "Rule engine: cash − minimum liquidity",
     "manageDocuments": "Manage documents",
@@ -367,6 +366,13 @@
     "table": "Table in the answer",
     "applied": "Applied, please review in the advisory",
     "viewInAdvisory": "View in advisory",
+    "reviewInQuestionnaire": "Review in the questionnaire",
+    "answerOutcome": {
+      "APPLIED": "Recorded as a proposal in the questionnaire. Only the advisor can confirm it.",
+      "OPEN": "Differs from the existing answer and awaits review in the questionnaire.",
+      "UNCHANGED": "Matches the existing answer, nothing changed.",
+      "REJECTED": "Not recorded, the value is not valid for this question."
+    },
     "rejected": "Rejected",
     "undo": "Undo",
     "applyFailed": "Could not apply",
@@ -388,8 +394,7 @@
     "failed": "Copilot unavailable: {{detail}}",
     "noClient": "Please select a client first.",
     "page": "p. {{page}}",
-    "fallbackDocument": "Document",
-    "fallbackProposal": "Proposal"
+    "fallbackDocument": "Document"
   },
   "backend": {
     "unavailableTitle": "Backend unavailable.",

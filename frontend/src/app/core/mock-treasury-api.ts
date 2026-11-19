@@ -14,7 +14,10 @@ import {
   DOCUMENT_PIPELINE,
   HedgeProposal,
   HedgeSettings,
+  KeyFigure,
+  Question,
   Questionnaire,
+  fxFlowOf,
 } from './models';
 import { ApiError, TreasuryApi } from './treasury-api';
 
@@ -91,24 +94,28 @@ export class MockTreasuryApi extends TreasuryApi {
 
   async getClient(id: string): Promise<ClientDetail> {
     const client = this.require(id);
-    const number = (key: string) => {
+    const figure = (key: string): KeyFigure => {
       const answer = client.answers.get(key);
-      return answer ? Number(answer.value) : null;
+      return {
+        key,
+        value: answer ? Number(answer.value) : null,
+        status: answer?.status ?? 'MISSING',
+        origin: answer?.origin ?? null,
+        source: this.textOrNull(answer?.source ?? null),
+      };
     };
-    const source = (key: string) => this.textOrNull(client.answers.get(key)?.source ?? null);
     return {
       ...this.toSummary(client),
-      figures: FIGURE_KEYS.map((key) => ({ key, value: number(key), source: source(key) })),
+      figures: FIGURE_KEYS.map(figure),
       fxFlows: ['eur', 'usd']
         .filter((ccy) => client.answers.has(`fx.${ccy}.inflow`))
-        .map((ccy) => ({
-          currency: ccy.toUpperCase(),
-          inflow: number(`fx.${ccy}.inflow`) ?? 0,
-          outflow: number(`fx.${ccy}.outflow`) ?? 0,
-          source: source(`fx.${ccy}.inflow`),
-        })),
+        .map((ccy) =>
+          fxFlowOf(ccy.toUpperCase(), figure(`fx.${ccy}.inflow`), figure(`fx.${ccy}.outflow`)),
+        ),
       documents: client.documents,
-      minimumLiquidity: number('goals.minimumLiquidity'),
+      minimumLiquidity: client.answers.has('goals.minimumLiquidity')
+        ? figure('goals.minimumLiquidity')
+        : null,
     };
   }
 
@@ -158,8 +165,9 @@ export class MockTreasuryApi extends TreasuryApi {
     };
   }
 
-  async setAnswer(clientId: string, key: string, value: string): Promise<void> {
+  async setAnswer(clientId: string, question: Question, value: string): Promise<void> {
     const client = this.require(clientId);
+    const key = question.key;
     const previous = client.answers.get(key);
     const changed = previous?.value !== value;
     client.answers.set(key, {
@@ -212,6 +220,7 @@ export class MockTreasuryApi extends TreasuryApi {
         done: client.checklistDone.has(item.id),
       })),
       unconfirmedAnswers: this.unconfirmed(client),
+      otherBlockers: [],
       approvalStatus: client.approved ? 'APPROVED' : 'NOT_APPROVED',
     };
   }

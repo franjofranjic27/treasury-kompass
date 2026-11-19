@@ -250,7 +250,6 @@
     "position": "Position",
     "origin": "Herkunft",
     "minimumLiquidity": "Mindestliquidität",
-    "minimumLiquiditySource": "Fragebogen, Ziele und Bedürfnisse",
     "investable": "Anlagefähig",
     "investableRule": "Regelwerk: flüssige Mittel − Mindestliquidität",
     "manageDocuments": "Unterlagen verwalten",
@@ -367,6 +366,13 @@
     "table": "Tabelle in der Antwort",
     "applied": "Übernommen, bitte in der Beratung prüfen",
     "viewInAdvisory": "In der Beratung ansehen",
+    "reviewInQuestionnaire": "Im Fragebogen prüfen",
+    "answerOutcome": {
+      "APPLIED": "Als Vorschlag im Fragebogen erfasst. Bestätigen kann nur der Berater.",
+      "OPEN": "Weicht von der bestehenden Antwort ab und liegt im Fragebogen zur Prüfung bereit.",
+      "UNCHANGED": "Entspricht der bestehenden Antwort, nichts geändert.",
+      "REJECTED": "Nicht erfasst, der Wert ist für diese Frage nicht zulässig."
+    },
     "rejected": "Verworfen",
     "undo": "Rückgängig",
     "applyFailed": "Übernahme fehlgeschlagen",
@@ -388,8 +394,7 @@
     "failed": "Copilot nicht verfügbar: {{detail}}",
     "noClient": "Bitte zuerst einen Kunden auswählen.",
     "page": "S. {{page}}",
-    "fallbackDocument": "Dokument",
-    "fallbackProposal": "Vorschlag"
+    "fallbackDocument": "Dokument"
   },
   "backend": {
     "unavailableTitle": "Backend nicht erreichbar.",

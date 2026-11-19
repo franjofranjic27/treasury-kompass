@@ -16,7 +16,7 @@ export interface SeedAnswer {
 
 export type AssessmentSeed = Omit<
   Assessment,
-  'checklist' | 'unconfirmedAnswers' | 'approvalStatus' | 'version'
+  'checklist' | 'unconfirmedAnswers' | 'otherBlockers' | 'approvalStatus' | 'version'
 >;
 
 export interface ClientSeed {

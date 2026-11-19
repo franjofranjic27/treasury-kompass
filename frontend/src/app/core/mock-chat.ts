@@ -196,6 +196,7 @@ function refuseApproval(seed: ClientSeed | null): readonly ScriptedEvent[] {
     {
       type: 'proposal',
       proposal: {
+        kind: 'hedge',
         title: l(
           `Entwurf: EUR-Absicherung ${cap} / ${cap} / ${cap} / ${cap} %`,
           `Draft: EUR hedge ${cap} / ${cap} / ${cap} / ${cap}%`,

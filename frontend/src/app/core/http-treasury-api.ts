@@ -19,6 +19,7 @@ import {
   EXPOSURE_DIRECTIONS,
   HedgeSettings,
   KNOWLEDGE_LEVELS,
+  KeyFigure,
   PRODUCT_CODES,
   ProductSuitability,
   Question,
@@ -26,6 +27,7 @@ import {
   Questionnaire,
   RISK_PROFILE_CODES,
   SUITABILITY_CODES,
+  fxFlowOf,
   toCode,
 } from './models';
 import { ApiError, BackendUnavailableError, TreasuryApi } from './treasury-api';
@@ -34,6 +36,11 @@ type Json = Record<string, unknown>;
 
 const POLL_MS = 2000;
 const TERMINAL: readonly DocumentStatus[] = ['EXTRACTED', 'FAILED'];
+const ANSWER_STATUSES: readonly AnswerStatus[] = ['PROPOSED', 'CONFIRMED'];
+const FX_FLOW_KEY = /^fx\.([a-z]{3})\.(?:inflow|outflow)$/;
+const PROPOSAL_OUTCOMES = ['APPLIED', 'OPEN', 'UNCHANGED', 'REJECTED'] as const;
+/** Blockers the advisory screen counts itself; all others are listed with the backend's wording. */
+const COUNTED_BLOCKERS: readonly string[] = ['UNCONFIRMED_ANSWER', 'OPEN_CHECKLIST_ITEM'];
 const ACCEPT_JSON: Readonly<Record<string, string>> = { Accept: 'application/json' };
 
 interface SendInit {
@@ -91,37 +98,31 @@ export class HttpTreasuryApi extends TreasuryApi {
   }
 
   async getClient(id: string): Promise<ClientDetail> {
-    const [client, documents] = await Promise.all([
+    // The detail's key figures cover financials and FX flows only; the minimum liquidity is a goal.
+    const [client, documents, questionnaire] = await Promise.all([
       this.request(`/api/clients/${id}`),
       this.request(`/api/clients/${id}/documents`).catch(() => []),
+      this.request(`/api/clients/${id}/questionnaire`).catch(() => null),
     ]);
     const c = obj(client);
-    const fin = obj(c['financials'] ?? c['fin']);
-    const fx = obj(c['fxFlows'] ?? c['fx']);
+    const answers = new Map(
+      arr(c['keyFigures']).map((f): [string, Json] => [str(obj(f)['key']), obj(f)]),
+    );
+    const figure = (key: string) => this.mapFigure(key, answers.get(key) ?? {});
+    const currencies = new Set(
+      [...answers.keys()].flatMap((key) => FX_FLOW_KEY.exec(key)?.[1] ?? []),
+    );
+    const minimumLiquidity = findAnswer(questionnaire, 'goals.minimumLiquidity');
     return {
       ...mapSummary(c),
-      figures: FIGURE_KEYS.map((key) => {
-        const raw = fin[key.replace('fin.', '')] ?? c[key];
-        const entry = obj(raw);
-        return {
-          key,
-          value: typeof raw === 'object' ? optNum(entry['value']) : optNum(raw),
-          source:
-            typeof raw === 'object'
-              ? optStr(entry['source'] ?? citationText(entry['citation']))
-              : null,
-        };
-      }),
-      fxFlows: Object.entries(fx).map(([ccy, flow]) => ({
-        currency: ccy.toUpperCase(),
-        inflow: num(obj(flow)['inflow']),
-        outflow: num(obj(flow)['outflow']),
-        source: optStr(obj(flow)['source']),
-      })),
-      documents: arr(Array.isArray(documents) ? documents : obj(documents)['content']).map((d) =>
-        mapDocument(obj(d)),
+      figures: FIGURE_KEYS.map(figure),
+      fxFlows: [...currencies].map((ccy) =>
+        fxFlowOf(ccy.toUpperCase(), figure(`fx.${ccy}.inflow`), figure(`fx.${ccy}.outflow`)),
       ),
-      minimumLiquidity: optNum(obj(c['goals'])['minimumLiquidity']),
+      documents: arr(documents).map((d) => mapDocument(obj(d))),
+      minimumLiquidity: minimumLiquidity
+        ? this.mapFigure('goals.minimumLiquidity', minimumLiquidity)
+        : null,
     };
   }
 
@@ -158,14 +159,20 @@ export class HttpTreasuryApi extends TreasuryApi {
           id: str(section['id']),
           title: str(section['title'], str(section['id'])),
           legalBasis: str(section['legalBasis']),
-          questions: arr(section['questions']).map((q) => mapQuestion(obj(q))),
+          // Hidden questions (e.g. opting-in without a professional base) do not apply to this client.
+          questions: arr(section['questions'])
+            .map(obj)
+            .filter((q) => q['visible'] !== false)
+            .map((q) => mapQuestion(q, (answer) => this.sourceOf(answer))),
         };
       }),
     };
   }
 
-  async setAnswer(clientId: string, key: string, value: string): Promise<void> {
-    await this.request(`/api/clients/${clientId}/answers/${key}`, 'PUT', { value });
+  async setAnswer(clientId: string, question: Question, value: string): Promise<void> {
+    await this.request(`/api/clients/${clientId}/answers/${question.key}`, 'PUT', {
+      value: answerPayload(question.type, value),
+    });
   }
 
   async confirmAnswer(clientId: string, key: string): Promise<void> {
@@ -277,6 +284,39 @@ export class HttpTreasuryApi extends TreasuryApi {
     return body;
   }
 
+  private mapFigure(key: string, answer: Json): KeyFigure {
+    const value = optNum(answer['value']);
+    return {
+      key,
+      value,
+      status: answerStatus(answer['status'], value !== null),
+      origin: toCode(answer['source'], ANSWER_ORIGINS),
+      source: this.sourceOf(answer),
+    };
+  }
+
+  /**
+   * Fundstelle of an answer: the citation's label, else document and page. Rule proposals explain
+   * their origin in `note` («Vorschlag aus dem Betriebsaufwand …»), as the demo data does.
+   */
+  private sourceOf(answer: Json): string | null {
+    const note = optStr(answer['note']);
+    if (answer['source'] === 'RULE' && note) return note;
+    return this.citationLabel(answer['citation']) ?? note;
+  }
+
+  private citationLabel(citation: unknown): string | null {
+    const c = obj(citation);
+    const label = optStr(c['locationLabel']);
+    if (label) return label;
+    const document = optStr(c['documentName']);
+    const page = optNum(c['page']);
+    if (!document) return null;
+    return page === null
+      ? document
+      : `${document}, ${this.translate.instant('chat.page', { page })}`;
+  }
+
   /** Reports the outage to the shell, which offers the switch to demo data, and returns the error to throw. */
   private backendUnavailable(status = 0): BackendUnavailableError {
     this.dataMode.reportUnavailable();
@@ -334,21 +374,21 @@ export class HttpTreasuryApi extends TreasuryApi {
           },
         });
         break;
-      case 'proposal':
+      case 'proposal': {
+        // The agent proposes answers (propose_answer), already recorded at treasury-service.
+        const label = str(data['questionLabel'] ?? data['questionKey']);
+        if (!label) break;
+        const outcome = toCode(data['outcome'], PROPOSAL_OUTCOMES) ?? 'OPEN';
         onEvent({
           type: 'proposal',
           proposal: {
-            title: str(
-              data['title'] ?? data['key'],
-              this.translate.instant('chat.fallbackProposal'),
-            ),
-            detail: str(data['detail'] ?? data['value'] ?? data['rationale']),
-            currency: str(data['currency'], 'EUR'),
-            startRatio: num(data['startRatio'], 0),
-            stepDown: num(data['stepDown'], 0),
+            kind: 'answer',
+            title: `${label}: ${str(data['valueLabel'] ?? data['value'], '–')}`,
+            detail: this.translate.instant(`chat.answerOutcome.${outcome}`),
           },
         });
         break;
+      }
       case 'error':
         onEvent({
           type: 'error',
@@ -364,13 +404,32 @@ export class HttpTreasuryApi extends TreasuryApi {
   }
 }
 
-/** «Jahresrechnung_2025.pdf, Bilanz, S. 4» from a Citation DTO, worded by the backend. */
-function citationText(citation: unknown): string | null {
-  const c = obj(citation);
-  const parts = [optStr(c['documentName']), optStr(c['locationLabel'])].filter(
-    (p): p is string => p !== null,
-  );
-  return parts.length ? parts.join(', ') : null;
+/** Unconfirmed values without an explicit status count as proposals, so they still need confirming. */
+function answerStatus(status: unknown, hasValue: boolean): AnswerStatus {
+  return toCode(status, ANSWER_STATUSES) ?? (hasValue ? 'PROPOSED' : 'MISSING');
+}
+
+/** The backend expects JSON numbers for amounts and percentages and booleans for yes/no questions. */
+function answerPayload(type: QuestionType, value: string): string | number | boolean {
+  switch (type) {
+    case 'AMOUNT':
+    case 'PERCENT':
+      return Number(value);
+    case 'BOOLEAN':
+      return value === 'true';
+    default:
+      return value;
+  }
+}
+
+function findAnswer(questionnaire: unknown, key: string): Json | null {
+  for (const section of arr(obj(questionnaire)['sections'])) {
+    const question = arr(obj(section)['questions'])
+      .map(obj)
+      .find((q) => q['key'] === key);
+    if (question) return question['answer'] ? obj(question['answer']) : null;
+  }
+  return null;
 }
 
 function mapSummary(c: Json): ClientSummary {
@@ -397,13 +456,9 @@ function mapDocument(d: Json): ClientDocument {
   };
 }
 
-function mapQuestion(q: Json): Question {
+function mapQuestion(q: Json, sourceOf: (answer: Json) => string | null): Question {
   const answer = obj(q['answer']);
   const value = q['value'] ?? answer['value'];
-  const status = str(
-    q['status'] ?? answer['status'],
-    value === undefined || value === null ? 'MISSING' : 'PROPOSED',
-  );
   return {
     key: str(q['key']),
     text: str(q['text'] ?? q['label'], str(q['key'])),
@@ -417,9 +472,9 @@ function mapQuestion(q: Json): Question {
         : { value: str(o), label: str(o) };
     }),
     value: value === undefined || value === null ? null : str(value),
-    status: (['PROPOSED', 'CONFIRMED'].includes(status) ? status : 'MISSING') as AnswerStatus,
+    status: answerStatus(q['status'] ?? answer['status'], value !== undefined && value !== null),
     origin: toCode(answer['source'], ANSWER_ORIGINS),
-    source: citationText(answer['citation']) ?? optStr(answer['note'] ?? q['source']),
+    source: sourceOf(answer),
   };
 }
 
@@ -440,6 +495,7 @@ function mapAssessment(a: Json): Assessment {
   const hedge = obj(a['hedges'] ?? a['hedge']);
   const liquidity = obj(a['liquidity']);
   const approval = obj(a['approval']);
+  const blockers = arr(approval['blockers']).map(obj);
   return {
     version: num(a['version'] ?? a['assessmentVersion'], 1),
     segment: {
@@ -526,10 +582,11 @@ function mapAssessment(a: Json): Assessment {
       legalBasis: str(obj(i)['legalBasis'] ?? obj(i)['ref']),
       done: Boolean(obj(i)['done']),
     })),
-    unconfirmedAnswers: num(
-      a['unconfirmedAnswers'] ??
-        arr(approval['blockers']).filter((b) => obj(b)['type'] === 'UNCONFIRMED_ANSWER').length,
-    ),
+    unconfirmedAnswers: blockers.filter((b) => b['type'] === 'UNCONFIRMED_ANSWER').length,
+    otherBlockers: blockers
+      .filter((b) => !COUNTED_BLOCKERS.includes(str(b['type'])))
+      .map((b) => str(b['text']))
+      .filter((text) => text !== ''),
     approvalStatus:
       str(approval['status'] ?? a['approvalStatus']) === 'APPROVED' ? 'APPROVED' : 'NOT_APPROVED',
   };

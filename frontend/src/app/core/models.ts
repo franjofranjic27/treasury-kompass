@@ -59,17 +59,26 @@ export interface ClientSummary {
   readonly approvalStatus: ApprovalStatus;
 }
 
-/** Labelled in the UI by `key` (translation `figure.<key>`). */
+/**
+ * A figure answered in the questionnaire, labelled in the UI by `key` (translation `figure.<key>`).
+ * PROPOSED values come from documents or rules and still need the advisor's confirmation.
+ */
 export interface KeyFigure {
   readonly key: string;
   readonly value: number | null;
+  readonly status: AnswerStatus;
+  readonly origin: AnswerOrigin | null;
+  /** Fundstelle, e.g. «Bilanz, S. 4»; null for values the advisor entered. */
   readonly source: string | null;
 }
 
+/** Inflows and outflows of one currency; status and source summarise both answers. */
 export interface FxFlow {
   readonly currency: string;
   readonly inflow: number;
   readonly outflow: number;
+  readonly status: AnswerStatus;
+  readonly origin: AnswerOrigin | null;
   readonly source: string | null;
 }
 
@@ -92,7 +101,7 @@ export interface ClientDetail extends ClientSummary {
   readonly figures: readonly KeyFigure[];
   readonly fxFlows: readonly FxFlow[];
   readonly documents: readonly ClientDocument[];
-  readonly minimumLiquidity: number | null;
+  readonly minimumLiquidity: KeyFigure | null;
 }
 
 export interface ChoiceOption {
@@ -198,6 +207,8 @@ export interface Assessment {
   readonly liquidity: { readonly excess: number; readonly parts: readonly LiquidityPart[] };
   readonly checklist: readonly ChecklistItem[];
   readonly unconfirmedAnswers: number;
+  /** Further reasons the backend blocks approval (e.g. an open proposal), already worded. */
+  readonly otherBlockers: readonly string[];
   readonly approvalStatus: ApprovalStatus;
 }
 
@@ -208,13 +219,24 @@ export interface Citation {
   readonly location: string;
 }
 
-export interface ChatProposal {
+/** Hedge settings the advisor can apply from the chat (scripted demo copilot). */
+export interface HedgeDraft {
+  readonly kind: 'hedge';
   readonly title: string;
   readonly detail: string;
   readonly currency: string;
   readonly startRatio: number;
   readonly stepDown: number;
 }
+
+/** An answer the agent recorded as proposal; the advisor decides on it in the questionnaire. */
+export interface AnswerDraft {
+  readonly kind: 'answer';
+  readonly title: string;
+  readonly detail: string;
+}
+
+export type ChatProposal = HedgeDraft | AnswerDraft;
 
 export type ChatEvent =
   | { readonly type: 'token'; readonly text: string }
@@ -226,6 +248,24 @@ export type ChatEvent =
 export interface HedgeSettings {
   readonly startRatio: number;
   readonly stepDown: number;
+}
+
+/** One currency's flows from its two answers: a proposal in either keeps the whole flow a proposal. */
+export function fxFlowOf(currency: string, inflow: KeyFigure, outflow: KeyFigure): FxFlow {
+  const statuses = [inflow.status, outflow.status];
+  const status: AnswerStatus = statuses.includes('PROPOSED')
+    ? 'PROPOSED'
+    : statuses.includes('MISSING')
+      ? 'MISSING'
+      : 'CONFIRMED';
+  return {
+    currency,
+    inflow: inflow.value ?? 0,
+    outflow: outflow.value ?? 0,
+    status,
+    origin: inflow.origin ?? outflow.origin,
+    source: inflow.source ?? outflow.source,
+  };
 }
 
 /** Narrows an unknown backend value to one of the given codes, or null if it is not one of them. */

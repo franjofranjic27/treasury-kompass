@@ -339,7 +339,7 @@ export class ProfilierungPage {
 
   protected async save(question: Question, value: string): Promise<void> {
     if (value === '' || value === question.value) return;
-    await this.run(() => this.api.setAnswer(this.id(), question.key, value));
+    await this.run(() => this.api.setAnswer(this.id(), question, value));
   }
 
   private async run(action: () => Promise<void>): Promise<void> {
