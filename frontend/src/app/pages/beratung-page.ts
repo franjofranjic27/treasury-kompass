@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, input, signal } from '@angular/cor
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { CurrentClient } from '../core/current-client';
+import { DataMode } from '../core/data-mode';
 import { ChfPipe, MioPipe, PctPipe } from '../core/format';
 import { Assessment, ChecklistItem, Exposure } from '../core/models';
 import { RefreshBus } from '../core/refresh-bus';
@@ -10,8 +11,9 @@ import { Badge } from '../shared/badge';
 import { CaseNav } from '../shared/case-nav';
 import { Icon } from '../shared/icon';
 import { jumpTo } from '../shared/jump-to';
+import { ScrollRegion } from '../shared/scroll-region';
 import { HedgeCard, HedgeSettingsChange } from './advisory/hedge-card';
-import { SUITABILITY_TONE, errorText, plural } from './labels';
+import { SUITABILITY_TONE, inlineError, plural } from './labels';
 
 interface Blocker {
   readonly key: string;
@@ -20,7 +22,19 @@ interface Blocker {
 
 @Component({
   selector: 'app-beratung-page',
-  imports: [RouterLink, TranslatePipe, ChfPipe, MioPipe, PctPipe, Badge, CaseNav, Icon, HedgeCard],
+  imports: [
+    RouterLink,
+    TranslatePipe,
+    ChfPipe,
+    MioPipe,
+    PctPipe,
+    Badge,
+    CaseNav,
+    Icon,
+    HedgeCard,
+    ScrollRegion,
+  ],
+  styleUrl: './beratung-page.scss',
   template: `
     <app-case-nav [clientId]="id()" />
     @if (assessment(); as a) {
@@ -156,7 +170,7 @@ interface Blocker {
             </ul>
           </div>
         }
-        <div class="table-wrap">
+        <div class="table-wrap" [appScrollRegion]="'advisory.allocationCaption' | translate">
           <table class="table">
             <caption class="sr-only">
               {{
@@ -195,7 +209,7 @@ interface Blocker {
           <span class="tag-rule">{{ 'common.ruleEngine' | translate }}</span>
         </div>
         <p class="meta-lg">{{ 'advisory.suitabilityLead' | translate }}</p>
-        <div class="table-wrap">
+        <div class="table-wrap" [appScrollRegion]="'advisory.suitabilityTitle' | translate">
           <table class="table">
             <thead>
               <tr>
@@ -207,7 +221,7 @@ interface Blocker {
             <tbody>
               @for (s of a.suitability; track s.product) {
                 <tr>
-                  <th scope="row" class="row-head">
+                  <th scope="row">
                     {{ 'product.' + s.product | translate }}
                     @if (s.kidRequired) {
                       <span class="meta block">{{ 'common.kidRequired' | translate }}</span>
@@ -292,7 +306,7 @@ interface Blocker {
           <p class="meta">{{ 'advisory.approvalNote' | translate }}</p>
         </div>
       </section>
-    } @else if (!error()) {
+    } @else if (!error() && !dataMode.backendUnavailable()) {
       <p class="meta-lg" role="status">{{ 'advisory.loading' | translate }}</p>
     }
   `,
@@ -301,6 +315,7 @@ export class BeratungPage {
   readonly id = input.required<string>();
 
   protected readonly currentClient = inject(CurrentClient);
+  protected readonly dataMode = inject(DataMode);
   private readonly api = inject(TreasuryApi);
   private readonly refresh = inject(RefreshBus);
   private readonly translate = inject(TranslateService);
@@ -399,7 +414,7 @@ export class BeratungPage {
       await action();
       await this.load(this.id());
     } catch (e) {
-      this.error.set(errorText(e));
+      this.error.set(inlineError(e));
     }
   }
 
@@ -408,7 +423,9 @@ export class BeratungPage {
       this.assessment.set(await this.api.getAssessment(id));
       this.error.set(null);
     } catch (e) {
-      this.error.set(this.translate.instant('advisory.loadFailed', { detail: errorText(e) }));
+      this.error.set(
+        inlineError(e, (detail) => this.translate.instant('advisory.loadFailed', { detail })),
+      );
     }
   }
 }

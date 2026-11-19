@@ -1,0 +1,312 @@
+// Below this width the chat becomes a drawer; keep in sync with NARROW_VIEWPORT in chat-layout.ts.
+$narrow: 1023.98px;
+// Below this width the advisor's name gives its room to the breadcrumb (still read by screen readers).
+$compact-header: 1365.98px;
+
+// The shell is exactly one viewport high: header / body / footer. Overflow is handled inside the
+// body (main area and chat history), which is why the document never scrolls.
+:host {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 10px;
+  z-index: 30;
+  padding: 10px 15px;
+  background: var(--fg-1);
+  color: var(--bg);
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.skip-link:focus {
+  top: 10px;
+  color: var(--bg);
+}
+
+// ---------- Header ----------
+// One line on wide screens: the breadcrumb gives way (ellipsis) instead of the header growing.
+.topbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px 40px;
+  min-height: 90px;
+  padding: 0 30px;
+  border-bottom: 1px solid var(--grey-2);
+  background: var(--bg);
+}
+
+.brand {
+  color: var(--fg-1);
+  text-decoration: none;
+  font-size: 21px;
+  line-height: 26px;
+  font-weight: 900;
+  letter-spacing: 0.005em;
+}
+
+.breadcrumb {
+  flex: 1 1 0;
+  min-width: 0;
+
+  ol {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 17px;
+    line-height: 22px;
+  }
+
+  // The client name is shortened first, the other items only as a last resort; full text in `title`.
+  li {
+    flex: 0 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .crumb-client {
+    flex-shrink: 1000;
+  }
+
+  a,
+  [aria-current] {
+    display: block;
+    padding: 18px 8px 16px;
+    overflow: hidden;
+    color: var(--fg-1);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  [aria-current] {
+    font-weight: 700;
+  }
+}
+
+.topbar-tools {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 25px;
+}
+
+.lang-switch {
+  display: inline-flex;
+  border: 1px solid var(--line-card);
+  border-radius: 4px;
+  overflow: hidden;
+
+  button {
+    min-width: 44px;
+    min-height: 36px;
+    padding: 6px 12px;
+    border: 0;
+    background: var(--bg);
+    color: var(--fg-1);
+    font: inherit;
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  button + button {
+    border-left: 1px solid var(--line-card);
+  }
+
+  button:hover {
+    background: var(--grey-3);
+  }
+
+  button[aria-pressed='true'] {
+    background: var(--fg-1);
+    color: var(--bg);
+  }
+
+  button:focus-visible {
+    outline-offset: -4px;
+  }
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  line-height: 22px;
+  cursor: pointer;
+
+  input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--fg-1);
+  }
+}
+
+.advisor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  background: var(--grey-3);
+}
+
+.advisor-text {
+  display: flex;
+  flex-direction: column;
+
+  b {
+    font-size: 17px;
+    line-height: 22px;
+  }
+
+  span {
+    font-size: 15px;
+    line-height: 20px;
+    color: var(--fg-2);
+  }
+}
+
+.chat-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-card);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg-1);
+  font: inherit;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--grey-3);
+  }
+
+  &[aria-expanded='true'] {
+    border-color: var(--fg-1);
+    background: var(--fg-1);
+    color: var(--bg);
+  }
+}
+
+// ---------- Body: main area and chat ----------
+.layout {
+  position: relative;
+  display: flex;
+  min-height: 0;
+}
+
+// Positioned, so visually hidden descendants stay inside the scroll container.
+.content {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  padding: 30px 30px 40px;
+  overflow-y: auto;
+}
+
+.content router-outlet {
+  display: none;
+}
+
+.chat-aside {
+  flex: 0 0 380px;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--grey-4);
+  border-left: 1px solid var(--grey-2);
+}
+
+// The display above would otherwise override the hidden attribute.
+.chat-aside[hidden] {
+  display: none;
+}
+
+.footer {
+  padding: 8px 30px;
+  border-top: 1px solid var(--grey-2);
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--fg-2);
+}
+
+@media (max-width: $compact-header) {
+  .advisor-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: $narrow) {
+  .topbar {
+    flex-wrap: wrap;
+    padding: 10px 20px;
+  }
+
+  .breadcrumb {
+    flex-basis: 240px;
+  }
+
+  .topbar-tools {
+    flex: 0 1 auto;
+  }
+
+  .content {
+    padding: 20px 20px 30px;
+  }
+
+  .footer {
+    padding: 6px 20px;
+  }
+
+  // Drawer over the main area, below the header, so the header toggle stays reachable.
+  .chat-aside {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    width: min(440px, 100%);
+    box-shadow: -8px 0 24px rgb(0 0 0 / 18%);
+  }
+}

@@ -2,6 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { FIGURE_KEYS } from './catalog';
+import { isEventStreamResponse, isJsonResponse } from './content-type';
+import { DataMode } from './data-mode';
+import { delay } from './delay';
 import { LanguageService } from './i18n/language';
 import {
   ANSWER_ORIGINS,
@@ -25,12 +28,19 @@ import {
   SUITABILITY_CODES,
   toCode,
 } from './models';
-import { ApiError, TreasuryApi } from './treasury-api';
+import { ApiError, BackendUnavailableError, TreasuryApi } from './treasury-api';
 
 type Json = Record<string, unknown>;
 
 const POLL_MS = 2000;
 const TERMINAL: readonly DocumentStatus[] = ['EXTRACTED', 'FAILED'];
+const ACCEPT_JSON: Readonly<Record<string, string>> = { Accept: 'application/json' };
+
+interface SendInit {
+  readonly method: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body?: BodyInit;
+}
 
 const obj = (v: unknown): Json => (v !== null && typeof v === 'object' ? (v as Json) : {});
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -42,7 +52,6 @@ const num = (v: unknown, fallback = 0): number =>
   typeof v === 'number' ? v : Number(v ?? fallback) || fallback;
 const optNum = (v: unknown): number | null =>
   v === null || v === undefined || v === '' ? null : Number(v);
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Screen of the agent-service ChatContext, derived from the route the advisor is on. */
 type ChatScreen = 'START' | 'QUESTIONNAIRE' | 'DASHBOARD' | 'ADVISORY';
@@ -59,12 +68,14 @@ function screenOf(url: string): ChatScreen {
  * HTTP client for treasury-service (/api) and agent-service (/agent). DTOs are mapped loosely
  * because the backend contract is still evolving; unknown fields fall back to neutral defaults.
  * Codes stay codes (the UI translates them), worded texts are passed through as delivered.
+ * Anything that is not an answer of the backend becomes a {@link BackendUnavailableError}.
  */
 @Injectable()
 export class HttpTreasuryApi extends TreasuryApi {
   private readonly language = inject(LanguageService);
   private readonly translate = inject(TranslateService);
   private readonly router = inject(Router);
+  private readonly dataMode = inject(DataMode);
   /** Conversation per client from the `meta` event, so follow-up questions keep their context. */
   private readonly conversations = new Map<string, string>();
 
@@ -121,13 +132,12 @@ export class HttpTreasuryApi extends TreasuryApi {
   ): Promise<void> {
     const form = new FormData();
     form.append('file', file);
-    const response = await fetch(`/api/clients/${clientId}/documents`, {
+    const response = await this.send(`/api/clients/${clientId}/documents`, {
       method: 'POST',
-      headers: this.languageHeader(),
+      headers: ACCEPT_JSON,
       body: form,
     });
-    await ensureOk(response);
-    let document = mapDocument(obj(await response.json()));
+    let document = mapDocument(obj(await this.readJson(response)));
     onUpdate(document);
     while (!TERMINAL.includes(document.status)) {
       await delay(POLL_MS);
@@ -189,13 +199,9 @@ export class HttpTreasuryApi extends TreasuryApi {
   ): Promise<void> {
     // The agent only answers within one client's documents; clientId is required by the contract.
     if (!clientId) throw new ApiError(this.translate.instant('chat.noClient'), 400);
-    const response = await fetch('/agent/chat', {
+    const response = await this.send('/agent/chat', {
       method: 'POST',
-      headers: {
-        ...this.languageHeader(),
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      },
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({
         clientId,
         conversationId: this.conversations.get(clientId) ?? null,
@@ -203,8 +209,10 @@ export class HttpTreasuryApi extends TreasuryApi {
         context: { screen: screenOf(this.router.url) },
       }),
     });
-    await ensureOk(response);
-    if (!response.body) throw new ApiError(this.translate.instant('errors.agentNoResponse'), 502);
+    if (!isEventStreamResponse(response) || !response.body) {
+      throw this.backendUnavailable(response.status);
+    }
+    this.dataMode.reportAvailable();
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = '';
     for (;;) {
@@ -220,22 +228,59 @@ export class HttpTreasuryApi extends TreasuryApi {
   }
 
   private async request(url: string, method = 'GET', body?: unknown): Promise<unknown> {
-    const response = await fetch(url, {
+    const response = await this.send(url, {
       method,
       headers:
-        body === undefined
-          ? this.languageHeader()
-          : { ...this.languageHeader(), 'Content-Type': 'application/json' },
+        body === undefined ? ACCEPT_JSON : { ...ACCEPT_JSON, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    await ensureOk(response);
-    const text = await response.text();
-    return text ? JSON.parse(text) : null;
+    return this.readJson(response);
   }
 
-  /** Lets the backend word rule texts in the UI language; it may ignore the header. */
-  private languageHeader(): Record<string, string> {
-    return { 'Accept-Language': this.language.current() };
+  /**
+   * Sends a request with the UI language and returns only successful responses. The backend's
+   * problem details become an {@link ApiError}; network failures, 5xx and non-JSON error pages
+   * become a {@link BackendUnavailableError}.
+   */
+  private async send(url: string, init: SendInit): Promise<Response> {
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        // Lets the backend word rule texts in the UI language; it may ignore the header.
+        headers: { 'Accept-Language': this.language.current(), ...init.headers },
+      });
+    } catch {
+      throw this.backendUnavailable();
+    }
+    if (response.ok) return response;
+    if (response.status >= 500 || !isJsonResponse(response)) {
+      throw this.backendUnavailable(response.status);
+    }
+    const problem = obj(await response.json().catch(() => null));
+    const detail = str(problem['detail'] ?? problem['title'], response.statusText);
+    throw new ApiError(detail || `HTTP ${response.status}`, response.status);
+  }
+
+  /** An empty body is a valid answer; any other body must be JSON, never e.g. an SPA's index.html. */
+  private async readJson(response: Response): Promise<unknown> {
+    const text = await response.text();
+    if (!text.trim()) return null;
+    if (!isJsonResponse(response)) throw this.backendUnavailable(response.status);
+    let body: unknown;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw this.backendUnavailable(response.status);
+    }
+    this.dataMode.reportAvailable();
+    return body;
+  }
+
+  /** Reports the outage to the shell, which offers the switch to demo data, and returns the error to throw. */
+  private backendUnavailable(status = 0): BackendUnavailableError {
+    this.dataMode.reportUnavailable();
+    return new BackendUnavailableError(this.translate.instant('errors.backendUnavailable'), status);
   }
 
   private dispatchSseFrame(
@@ -249,6 +294,8 @@ export class HttpTreasuryApi extends TreasuryApi {
       if (line.startsWith('event:')) eventName = line.slice(6).trim();
       else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
     }
+    // Frames without data are keep-alive comments (`: ping`).
+    if (!dataLines.length) return;
     const raw = dataLines.join('\n');
     let data: Json = {};
     try {
@@ -270,6 +317,7 @@ export class HttpTreasuryApi extends TreasuryApi {
         onEvent({
           type: 'citation',
           citation: {
+            id: optStr(data['sourceId']),
             document: str(
               data['document'] ?? data['documentName'] ?? data['fileName'] ?? data['title'],
               this.translate.instant('chat.fallbackDocument'),
@@ -314,18 +362,6 @@ export class HttpTreasuryApi extends TreasuryApi {
         break;
     }
   }
-}
-
-async function ensureOk(response: Response): Promise<void> {
-  if (response.ok) return;
-  let detail = response.statusText;
-  try {
-    const problem = obj(await response.json());
-    detail = str(problem['detail'] ?? problem['title'], detail);
-  } catch {
-    // Body is not JSON (e.g. proxy error page); keep the status text.
-  }
-  throw new ApiError(detail || `HTTP ${response.status}`, response.status);
 }
 
 /** «Jahresrechnung_2025.pdf, Bilanz, S. 4» from a Citation DTO, worded by the backend. */

@@ -1,0 +1,246 @@
+// Fills the chat column (or drawer): head and form stay put, only the history scrolls.
+:host {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--grey-4);
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.chat-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--grey-2);
+}
+
+.chat-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+
+  h2 {
+    font-size: 21px;
+    line-height: 26px;
+  }
+}
+
+.chat-context {
+  margin-left: auto;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--fg-2);
+
+  b {
+    color: var(--fg-1);
+  }
+}
+
+.chat-scope {
+  display: flex;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--fg-2);
+
+  .icon {
+    margin-top: 2px;
+  }
+}
+
+// Positioned, so visually hidden descendants stay inside the scroll container.
+.chat-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.msg-user {
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.msg-meta {
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--fg-2);
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 10px 15px;
+  border-radius: 8px 8px 2px 8px;
+  background: var(--bg);
+  box-shadow: var(--card-line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.citation {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 15px;
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--card-line);
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.proposal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 15px;
+  background: var(--bg);
+  box-shadow: var(--card-line);
+}
+
+.proposal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  h3 {
+    font-size: 17px;
+    line-height: 22px;
+  }
+}
+
+.proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 20px;
+}
+
+.chat-busy {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--fg-2);
+}
+
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+.chip {
+  padding: 5px 15px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--card-line);
+  color: var(--fg-1);
+  font: inherit;
+  font-size: 17px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chip:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--fg-1);
+}
+
+.chip:disabled {
+  color: var(--fg-disabled);
+  cursor: not-allowed;
+}
+
+.chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 15px 20px 20px;
+  background: var(--bg);
+  border-top: 1px solid var(--grey-2);
+}
+
+.chat-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 15px;
+}
+
+.send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--fg-1);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+.send:disabled {
+  background: var(--grey-1);
+  cursor: not-allowed;
+}

@@ -1,0 +1,27 @@
+.factor-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  line-height: 22px;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px 20px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line-card);
+  }
+}
+
+:host-context(.card) .factor-list li {
+  padding: 8px 0;
+  border-top-color: var(--grey-2);
+}
+
+.factor-text {
+  display: flex;
+  flex-direction: column;
+}

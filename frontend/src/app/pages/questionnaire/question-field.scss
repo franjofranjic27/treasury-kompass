@@ -1,0 +1,65 @@
+.field-amount {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 5px;
+  width: 240px;
+  max-width: 100%;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+}
+
+.unit {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.q-text {
+  padding: 0;
+  font-weight: 700;
+}
+
+legend.q-text {
+  margin-bottom: 10px;
+}
+
+.q-hint {
+  max-width: 70ch;
+  font-size: 17px;
+  line-height: 22px;
+  color: var(--fg-2);
+}
+
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 30px;
+}
+
+.radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+
+  input {
+    flex: none;
+    width: 19px;
+    height: 19px;
+    margin: 4px 0 0;
+    accent-color: var(--fg-1);
+  }
+}

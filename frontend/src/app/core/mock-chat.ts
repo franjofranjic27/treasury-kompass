@@ -19,9 +19,20 @@ const SEGMENT_NAMES: Readonly<Record<ClientSegment, Localized>> = {
  */
 const APPROVAL_INTENT = /freigeb|freigabe|approv|100\s*%/;
 const SEGMENT_INTENT = /privatkunde|segment|höchstens|maximal|retail|at most|maximum/;
+const BALANCE_INTENT = /bilanz|eigenkapital|flüssige mittel|total assets|balance sheet|equity|cash/;
 const FX_FLOW_INTENT = /umsatz|einkauf|zuflüss|abflüss|revenue|purchas|inflow|outflow|eur/;
 
-/** Scripted agent answers following docs/specs/agent-testcases.md. The agent never approves. */
+const text = (value: Localized): ScriptedEvent => ({ type: 'token', text: value });
+const cite = (id: string, document: Localized, location: Localized): ScriptedEvent => ({
+  type: 'citation',
+  citation: { id, document, location },
+});
+const DONE: ScriptedEvent = { type: 'done' };
+
+/**
+ * Scripted agent answers following docs/specs/agent-testcases.md. Like the real agent they use markdown
+ * and cite sources as «[S1]». The agent never approves.
+ */
 export function scriptChatAnswer(
   seed: ClientSeed | null,
   message: string,
@@ -30,34 +41,59 @@ export function scriptChatAnswer(
   return resolveLocalized<readonly ChatEvent[]>(script(seed, message.toLowerCase()), language);
 }
 
-function script(seed: ClientSeed | null, text: string): readonly ScriptedEvent[] {
-  if (APPROVAL_INTENT.test(text)) return refuseApproval(seed);
-  if (SEGMENT_INTENT.test(text)) return explainSegment(seed);
-  if (FX_FLOW_INTENT.test(text)) return eurFlows(seed);
+function script(seed: ClientSeed | null, question: string): readonly ScriptedEvent[] {
+  if (APPROVAL_INTENT.test(question)) return refuseApproval(seed);
+  if (SEGMENT_INTENT.test(question)) return explainSegment(seed);
+  if (BALANCE_INTENT.test(question)) return balanceSheet(seed);
+  if (FX_FLOW_INTENT.test(question)) return eurFlows(seed);
   return [
-    {
-      type: 'token',
-      text: l(
+    text(
+      l(
         'Dazu finde ich in den Unterlagen keine belastbare Angabe. Ich beantworte Fragen zu Kennzahlen, ' +
           'Fremdwährungsflüssen, Kundensegment und Absicherungsvorschlag, jeweils mit Fundstelle.',
         'I cannot find any reliable information on this in the documents. I answer questions on key figures, ' +
           'foreign currency flows, client segment and hedging proposal, each with a citation.',
       ),
-    },
-    { type: 'done' },
+    ),
+    DONE,
   ];
 }
 
 function noClient(): readonly ScriptedEvent[] {
   return [
-    {
-      type: 'token',
-      text: l(
+    text(
+      l(
         'Bitte zuerst einen Kunden auswählen, damit ich in dessen Unterlagen suchen kann.',
         'Please select a client first so I can search their documents.',
       ),
-    },
-    { type: 'done' },
+    ),
+    DONE,
+  ];
+}
+
+function balanceSheet(seed: ClientSeed | null): readonly ScriptedEvent[] {
+  if (!seed) return noClient();
+  const value = (key: string) => seed.answers[key].value;
+  const { label, balanceSheetPage: page } = seed.document;
+  return [
+    text(
+      l(
+        `Bilanzwerte laut ${label['de-CH']} [S1]:\n\n` +
+          '| Position | CHF Mio. |\n| --- | ---: |\n' +
+          `| Bilanzsumme | ${value('fin.totalAssets')} |\n` +
+          `| Eigenkapital | ${value('fin.equity')} |\n` +
+          `| Flüssige Mittel | ${value('fin.cash')} |\n\n` +
+          'Kennzahlen wie die Eigenkapitalquote berechnet das Regelwerk.',
+        `Balance sheet figures (${label.en}) [S1]:\n\n` +
+          '| Item | CHF m |\n| --- | ---: |\n' +
+          `| Total assets | ${value('fin.totalAssets')} |\n` +
+          `| Equity | ${value('fin.equity')} |\n` +
+          `| Cash and cash equivalents | ${value('fin.cash')} |\n\n` +
+          'Ratios such as the equity ratio are calculated by the rule engine.',
+      ),
+    ),
+    cite('S1', label, l(`S. ${page}`, `p. ${page}`)),
+    DONE,
   ];
 }
 
@@ -67,23 +103,25 @@ function eurFlows(seed: ClientSeed | null): readonly ScriptedEvent[] {
   const outflow = seed.answers['fx.eur.outflow'];
   const subject =
     seed === COMPONENTS
-      ? l('Der Geschäftsbericht', 'The annual report')
-      : l('Die Jahresrechnung', 'The annual financial statements');
+      ? l('Der Geschäftsbericht 2025 weist', 'The annual report 2025 shows')
+      : l('Die Jahresrechnung 2025 weist', 'The annual financial statements 2025 show');
   return [
-    {
-      type: 'token',
-      text: l(
-        `${subject['de-CH']} 2025 weist für die nächsten 12 Monate Zuflüsse von EUR ${inflow.value} Mio. ` +
-          `und Abflüsse von EUR ${outflow.value} Mio. aus [S1]. Die Nettoposition berechnet das Regelwerk.`,
-        `${subject.en} 2025 show inflows of EUR ${inflow.value}m and outflows of EUR ${outflow.value}m ` +
-          'for the next 12 months [S1]. The rule engine calculates the net position.',
+    text(
+      l(
+        `${subject['de-CH']} für die nächsten 12 Monate folgende EUR-Flüsse aus [S1]:\n\n` +
+          '| Position | EUR Mio. |\n| --- | ---: |\n' +
+          `| Zuflüsse (Umsatz) | ${inflow.value} |\n` +
+          `| Abflüsse (Einkauf) | ${outflow.value} |\n\n` +
+          'Die Nettoposition berechnet das Regelwerk.',
+        `${subject.en} the following EUR flows for the next 12 months [S1]:\n\n` +
+          '| Item | EUR m |\n| --- | ---: |\n' +
+          `| Inflows (revenue) | ${inflow.value} |\n` +
+          `| Outflows (purchasing) | ${outflow.value} |\n\n` +
+          'The rule engine calculates the net position.',
       ),
-    },
-    {
-      type: 'citation',
-      citation: { document: seed.document.label, location: inflow.source ?? '–' },
-    },
-    { type: 'done' },
+    ),
+    cite('S1', seed.document.label, inflow.source ?? l('–', '–')),
+    DONE,
   ];
 }
 
@@ -94,64 +132,54 @@ function explainSegment(seed: ClientSeed | null): readonly ScriptedEvent[] {
     const reason = toLocalized(seed.assessment.segment.reason);
     const segment = SEGMENT_NAMES[seed.segment];
     return [
-      {
-        type: 'token',
-        text: l(
-          `${seed.name} ist ${segment['de-CH']}: ${reason['de-CH']} (Art. 4 und 5 FIDLEG). ` +
-            `Die Treasury-Policy erlaubt höchstens ${cap} %.`,
-          `${seed.name} is ${segment.en}: ${reason.en} (Art. 4 and 5 FinSA (FIDLEG)). ` +
-            `The treasury policy allows at most ${cap}%.`,
+      text(
+        l(
+          `${seed.name} ist **${segment['de-CH']}** (Art. 4 und 5 FIDLEG) [S1]:\n\n` +
+            `- ${reason['de-CH']}\n\n` +
+            `Die Treasury-Policy erlaubt höchstens **${cap} %**.`,
+          `${seed.name} is **${segment.en}** (Art. 4 and 5 FinSA (FIDLEG)) [S1]:\n\n` +
+            `- ${reason.en}\n\n` +
+            `The treasury policy allows at most **${cap}%**.`,
         ),
-      },
-      {
-        type: 'citation',
-        citation: {
-          document: AUDIT_TRAIL,
-          location: l('Regelentscheid Kundensegment', 'Rule decision, client segment'),
-        },
-      },
-      { type: 'done' },
+      ),
+      cite('S1', AUDIT_TRAIL, l('Regelentscheid Kundensegment', 'Rule decision, client segment')),
+      DONE,
     ];
   }
   return [
-    {
-      type: 'token',
-      text: l(
-        'Die Muster Maschinenbau AG ist Privatkunde, weil nur 1 von 3 Schwellenwerten überschritten ist ' +
-          '(Eigenkapital CHF 7.9 Mio.) und keine professionelle Tresorerie besteht (Art. 4 und 5 FIDLEG) [S1]. ' +
-          'Die EUR-Absicherung darf gemäss Treasury-Policy höchstens 80 % betragen; vorgeschlagen sind die Tranchen ' +
-          '80 / 70 / 60 / 50 % [S2]. Die Werte stammen aus Regelwerk und Audit-Trail, ich rechne nichts selbst.',
-        'Muster Maschinenbau AG is a retail client because only 1 of 3 thresholds is exceeded ' +
-          '(equity CHF 7.9m) and there is no professional treasury (Art. 4 and 5 FinSA (FIDLEG)) [S1]. ' +
-          'Under the treasury policy the EUR hedge may be at most 80%; the proposed tranches are ' +
-          '80 / 70 / 60 / 50% [S2]. The figures come from the rule engine and the audit trail; I do not calculate anything myself.',
+    text(
+      l(
+        'Die Muster Maschinenbau AG ist **Privatkunde** (Art. 4 und 5 FIDLEG) [S1]:\n\n' +
+          '- nur 1 von 3 Schwellenwerten überschritten (Eigenkapital CHF 7.9 Mio.)\n' +
+          '- keine professionelle Tresorerie\n\n' +
+          'Die EUR-Absicherung darf gemäss Treasury-Policy höchstens **80 %** betragen; ' +
+          'vorgeschlagen sind die Tranchen 80 / 70 / 60 / 50 % [S2].\n\n' +
+          'Die Werte stammen aus Regelwerk und Audit-Trail, ich rechne nichts selbst.',
+        'Muster Maschinenbau AG is a **retail client** (Art. 4 and 5 FinSA (FIDLEG)) [S1]:\n\n' +
+          '- only 1 of 3 thresholds exceeded (equity CHF 7.9m)\n' +
+          '- no professional treasury\n\n' +
+          'Under the treasury policy the EUR hedge may be at most **80%**; ' +
+          'the proposed tranches are 80 / 70 / 60 / 50% [S2].\n\n' +
+          'The figures come from the rule engine and the audit trail; I do not calculate anything myself.',
       ),
-    },
-    {
-      type: 'citation',
-      citation: {
-        document: seed.document.label,
-        location: l('Bilanz, S. 4', 'Balance sheet, p. 4'),
-      },
-    },
-    {
-      type: 'citation',
-      citation: {
-        document: AUDIT_TRAIL,
-        location: l('Regelentscheid Absicherungsquote EUR', 'Rule decision, EUR hedge ratio'),
-      },
-    },
-    { type: 'done' },
+    ),
+    cite('S1', seed.document.label, l('Bilanz, S. 4', 'Balance sheet, p. 4')),
+    cite(
+      'S2',
+      AUDIT_TRAIL,
+      l('Regelentscheid Absicherungsquote EUR', 'Rule decision, EUR hedge ratio'),
+    ),
+    DONE,
   ];
 }
 
+/** Deliberately plain text: a refusal should read as a clear sentence, not as formatted output. */
 function refuseApproval(seed: ClientSeed | null): readonly ScriptedEvent[] {
   if (!seed) return noClient();
   const cap = Number(seed.answers['goals.policyMaxHedgeRatio'].value);
   return [
-    {
-      type: 'token',
-      text: l(
+    text(
+      l(
         `Das kann ich nicht übernehmen. Die Treasury-Policy erlaubt höchstens ${cap} %, und freigeben kann nur der Berater, ` +
           'sobald die vorbefüllten Antworten bestätigt sind und die Checkliste erledigt ist. ' +
           `Ich kann einen Entwurf mit allen Tranchen auf ${cap} % vorbereiten, den Sie prüfen und bestätigen.`,
@@ -159,17 +187,12 @@ function refuseApproval(seed: ClientSeed | null): readonly ScriptedEvent[] {
           'once the prefilled answers are confirmed and the checklist is complete. ' +
           `I can prepare a draft with all tranches at ${cap}% for you to review and confirm.`,
       ),
-    },
-    {
-      type: 'citation',
-      citation: {
-        document: AUDIT_TRAIL,
-        location: l(
-          'Treasury-Policy, maximale Absicherungsquote',
-          'Treasury policy, maximum hedge ratio',
-        ),
-      },
-    },
+    ),
+    cite(
+      'S1',
+      AUDIT_TRAIL,
+      l('Treasury-Policy, maximale Absicherungsquote', 'Treasury policy, maximum hedge ratio'),
+    ),
     {
       type: 'proposal',
       proposal: {
@@ -186,6 +209,6 @@ function refuseApproval(seed: ClientSeed | null): readonly ScriptedEvent[] {
         stepDown: 0,
       },
     },
-    { type: 'done' },
+    DONE,
   ];
 }

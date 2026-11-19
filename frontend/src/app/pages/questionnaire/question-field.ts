@@ -7,6 +7,7 @@ import { AnswerState } from './answer-state';
   selector: 'app-question-field',
   imports: [AnswerState],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrl: './question-field.scss',
   template: `
     @let q = question();
     @if (q.options.length) {

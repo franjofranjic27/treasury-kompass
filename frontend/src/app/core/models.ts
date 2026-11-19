@@ -73,6 +73,14 @@ export interface FxFlow {
   readonly source: string | null;
 }
 
+/** Processing steps of an uploaded document in order; `FAILED` can end the pipeline at any step. */
+export const DOCUMENT_PIPELINE: readonly DocumentStatus[] = [
+  'UPLOADED',
+  'TEXT_EXTRACTED',
+  'INDEXED',
+  'EXTRACTED',
+];
+
 export interface ClientDocument {
   readonly id: string;
   readonly fileName: string;
@@ -194,6 +202,8 @@ export interface Assessment {
 }
 
 export interface Citation {
+  /** Marker the answer text refers to, e.g. `S1` for «[S1]»; null if the source did not name one. */
+  readonly id: string | null;
   readonly document: string;
   readonly location: string;
 }

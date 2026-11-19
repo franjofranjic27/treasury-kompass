@@ -1,0 +1,171 @@
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 20px 30px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 15px 20px;
+  background: var(--grey-3);
+}
+
+.kpi-label {
+  font-size: 17px;
+  line-height: 22px;
+  color: var(--fg-2);
+}
+
+.allocation {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.allocation-bar {
+  display: flex;
+  gap: 2px;
+  height: 24px;
+}
+
+.allocation-part {
+  flex: 1 1 0;
+
+  &:first-child {
+    border-radius: 4px 0 0 4px;
+  }
+
+  &:last-child {
+    border-radius: 0 4px 4px 0;
+  }
+}
+
+.allocation-part,
+.swatch {
+  &[data-index='0'] {
+    background: var(--chart-1);
+  }
+
+  &[data-index='1'] {
+    background: var(--chart-2);
+  }
+
+  &[data-index='2'] {
+    background: var(--chart-3);
+  }
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 25px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  line-height: 22px;
+  color: var(--fg-2);
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  b {
+    color: var(--fg-1);
+  }
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.sub-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  h4 {
+    font-size: 17px;
+    line-height: 22px;
+  }
+}
+
+.prefill-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--grey-2);
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    margin-bottom: 10px;
+    padding: 0;
+    font-size: 17px;
+    line-height: 22px;
+    font-weight: 700;
+  }
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 2px 0 0;
+    accent-color: var(--fg-1);
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    font-size: 17px;
+    line-height: 22px;
+    cursor: pointer;
+  }
+}
+
+.approval-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+  padding-top: 20px;
+  border-top: 1px solid var(--grey-2);
+}
+
+.approve-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 15px 20px;
+  width: 100%;
+
+  p {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+}

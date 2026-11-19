@@ -1,0 +1,136 @@
+// Not encapsulated (see ChatMarkdown): every rule is scoped below app-chat-markdown.
+app-chat-markdown {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+app-chat-markdown .md {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-size: 17px;
+    line-height: 22px;
+    font-weight: 700;
+  }
+
+  h3 {
+    font-size: 19px;
+    line-height: 24px;
+  }
+
+  ul,
+  ol {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding-left: 22px;
+  }
+
+  li > ul,
+  li > ol {
+    margin-top: 4px;
+  }
+
+  blockquote {
+    margin: 0;
+    padding-left: 12px;
+    border-left: 3px solid var(--grey-1);
+    color: var(--fg-2);
+  }
+
+  hr {
+    width: 100%;
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--grey-2);
+  }
+
+  code {
+    padding: 1px 4px;
+    border-radius: 2px;
+    background: var(--grey-3);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 15px;
+  }
+
+  pre {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 4px;
+    background: var(--grey-3);
+    overflow-x: auto;
+
+    code {
+      padding: 0;
+      background: none;
+      white-space: pre;
+      overflow-wrap: normal;
+    }
+  }
+
+  a {
+    color: var(--fg-1);
+  }
+
+  .md-table {
+    max-width: 100%;
+    overflow-x: auto;
+    background: var(--bg);
+    box-shadow: var(--card-line);
+  }
+
+  table {
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+    line-height: 20px;
+    overflow-wrap: normal;
+  }
+
+  th,
+  td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--grey-2);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    border-bottom: 2px solid var(--fg-1);
+    font-weight: 700;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  [align='right'] {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  [align='center'] {
+    text-align: center;
+  }
+
+  .cite {
+    display: inline-block;
+    margin-left: 2px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--bg);
+    box-shadow: var(--card-line);
+    font-size: 11px;
+    line-height: 15px;
+    font-weight: 700;
+    vertical-align: super;
+    cursor: help;
+  }
+}

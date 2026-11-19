@@ -11,6 +11,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { MioPipe, PctPipe } from '../../core/format';
 import { Exposure, HedgeProposal, HedgeSettings } from '../../core/models';
 import { Icon } from '../../shared/icon';
+import { ScrollRegion } from '../../shared/scroll-region';
 
 export interface HedgeSettingsChange {
   readonly currency: string;
@@ -26,8 +27,9 @@ const MONTHS_PER_TRANCHE = 3;
  */
 @Component({
   selector: 'app-hedge-card',
-  imports: [TranslatePipe, MioPipe, PctPipe, Icon],
+  imports: [TranslatePipe, MioPipe, PctPipe, Icon, ScrollRegion],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrl: './hedge-card.scss',
   template: `
     @let h = hedge();
     @let e = exposure();
@@ -164,7 +166,10 @@ const MONTHS_PER_TRANCHE = 3;
             </div>
           </div>
 
-          <div class="table-wrap">
+          <div
+            class="table-wrap"
+            [appScrollRegion]="'advisory.trancheCaption' | translate: { currency: h.currency }"
+          >
             <table class="table">
               <caption class="sr-only">
                 {{

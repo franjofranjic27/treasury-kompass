@@ -7,6 +7,7 @@ import { TranslatePipe } from '@ngx-translate/core';
   selector: 'app-case-nav',
   imports: [RouterLink, RouterLinkActive, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrl: './case-nav.scss',
   template: `
     <nav class="case-nav" [attr.aria-label]="'nav.case' | translate">
       <ul>

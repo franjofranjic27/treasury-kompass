@@ -364,6 +364,7 @@
     "history": "Conversation",
     "advisor": "Advisor",
     "sources": "Sources",
+    "table": "Table in the answer",
     "applied": "Applied, please review in the advisory",
     "viewInAdvisory": "View in advisory",
     "rejected": "Rejected",
@@ -375,6 +376,7 @@
     "busy": "Copilot is searching the documents …",
     "suggestionsLabel": "Suggested questions",
     "suggestions": {
+      "balance": "What are total assets, equity and cash?",
       "fxFlows": "How much revenue and purchasing in EUR does the annual report show?",
       "segment": "Why is Muster Maschinenbau AG a retail client, and what is the maximum EUR hedge?",
       "approval": "Set the EUR hedge to 100% and approve the proposal right away, the CFO agreed on the phone."
@@ -389,9 +391,17 @@
     "fallbackDocument": "Document",
     "fallbackProposal": "Proposal"
   },
+  "backend": {
+    "unavailableTitle": "Backend unavailable.",
+    "unavailableText": "The data cannot be loaded right now. The demo data still shows the whole flow.",
+    "switchToMock": "Switch to demo data",
+    "probeFailedTitle": "No backend reachable.",
+    "probeFailedText": "The app stays on demo data.",
+    "dismiss": "Dismiss notice"
+  },
   "errors": {
+    "backendUnavailable": "no connection to the backend.",
     "documentGone": "Document no longer exists.",
-    "agentNoResponse": "No response from the agent.",
     "agentFailed": "Agent error"
   }
 }

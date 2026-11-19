@@ -20,7 +20,8 @@ const TONE_ICON: Readonly<Record<BadgeTone, IconName>> = {
   selector: 'app-badge',
   imports: [Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'badge', '[attr.data-tone]': 'tone()' },
+  host: { '[attr.data-tone]': 'tone()' },
+  styleUrl: './badge.scss',
   template: `
     <app-icon [name]="iconName()" [size]="16" [strokeWidth]="strokeWidth()" />
     <span><ng-content /></span>
@@ -28,9 +29,8 @@ const TONE_ICON: Readonly<Record<BadgeTone, IconName>> = {
 })
 export class Badge {
   readonly tone = input.required<BadgeTone>();
-  readonly icon = input<IconName>();
 
-  protected readonly iconName = computed(() => this.icon() ?? TONE_ICON[this.tone()]);
+  protected readonly iconName = computed(() => TONE_ICON[this.tone()]);
   protected readonly strokeWidth = computed(() =>
     this.iconName() === 'check' || this.iconName() === 'progress' ? 2 : 2.5,
   );

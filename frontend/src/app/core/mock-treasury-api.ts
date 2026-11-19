@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { FIGURE_KEYS, QUESTIONS, SECTIONS } from './catalog';
+import { delay } from './delay';
 import { LanguageService } from './i18n/language';
 import { Localizable, Localized, l, resolveLocalized } from './i18n/localized';
 import { scriptChatAnswer } from './mock-chat';
@@ -10,7 +11,7 @@ import {
   ClientDetail,
   ClientDocument,
   ClientSummary,
-  DocumentStatus,
+  DOCUMENT_PIPELINE,
   HedgeProposal,
   HedgeSettings,
   Questionnaire,
@@ -30,15 +31,10 @@ interface MockClient {
   version: number;
 }
 
-const STATUS_FLOW: readonly DocumentStatus[] = [
-  'UPLOADED',
-  'TEXT_EXTRACTED',
-  'INDEXED',
-  'EXTRACTED',
-];
-const STEP_MS = 1200;
-
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Simulated latencies; fixed values keep the demo (and its E2E tests) deterministic. */
+const STEP_MS = 1000;
+const TOKEN_MS = 18;
+const EVENT_MS = 120;
 
 /**
  * In-memory implementation; state lives until the page is reloaded. Like a backend that honours
@@ -123,7 +119,7 @@ export class MockTreasuryApi extends TreasuryApi {
   ): Promise<void> {
     const client = this.require(clientId);
     const id = `doc-${Date.now()}`;
-    for (const status of STATUS_FLOW) {
+    for (const status of DOCUMENT_PIPELINE) {
       const document: ClientDocument = {
         id,
         fileName: file.name,
@@ -281,11 +277,11 @@ export class MockTreasuryApi extends TreasuryApi {
     for (const event of scriptChatAnswer(seed, message, this.language.current())) {
       if (event.type === 'token') {
         for (const word of event.text.split(/(?<= )/)) {
-          await delay(18);
+          await delay(TOKEN_MS);
           onEvent({ type: 'token', text: word });
         }
       } else {
-        await delay(120);
+        await delay(EVENT_MS);
         onEvent(event);
       }
     }

@@ -2,18 +2,20 @@ import { Component, computed, effect, inject, input, signal, untracked } from '@
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { ClientDocument, ClientSummary } from '../core/models';
+import { DataMode } from '../core/data-mode';
+import { ClientDocument, ClientSummary, DOCUMENT_PIPELINE } from '../core/models';
 import { RefreshBus } from '../core/refresh-bus';
 import { TreasuryApi } from '../core/treasury-api';
 import { Badge } from '../shared/badge';
 import { Icon } from '../shared/icon';
-import { CLIENT_STATUS_TONE, DOCUMENT_STEPS, clientStatus, errorText, plural } from './labels';
+import { CLIENT_STATUS_TONE, clientStatus, inlineError, plural } from './labels';
 
 type StageState = 'done' | 'running' | 'open';
 
 @Component({
   selector: 'app-start-page',
   imports: [FormsModule, RouterLink, TranslatePipe, Badge, Icon],
+  styleUrl: './start-page.scss',
   template: `
     <div class="page-head">
       <div class="page-title">
@@ -98,6 +100,7 @@ type StageState = 'done' | 'running' | 'open';
             <button
               type="button"
               class="client-row"
+              data-testid="client-row"
               [class.selected]="isSelected"
               [attr.aria-pressed]="isSelected"
               (click)="select(c.id)"
@@ -158,7 +161,7 @@ type StageState = 'done' | 'running' | 'open';
           </li>
         }
       </ul>
-      @if (!clients().length) {
+      @if (!clients().length && !error() && !dataMode.backendUnavailable()) {
         <div class="empty-state">
           <p class="strong">{{ 'start.emptyTitle' | translate }}</p>
           <p class="meta-lg">{{ 'start.emptyText' | translate }}</p>
@@ -269,7 +272,8 @@ export class StartPage {
   private readonly refresh = inject(RefreshBus);
   private readonly translate = inject(TranslateService);
 
-  protected readonly steps = DOCUMENT_STEPS;
+  protected readonly dataMode = inject(DataMode);
+  protected readonly steps = DOCUMENT_PIPELINE;
   protected readonly statusTone = CLIENT_STATUS_TONE;
   protected readonly clientStatus = clientStatus;
   protected readonly plural = plural;
@@ -302,7 +306,7 @@ export class StartPage {
     try {
       this.documents.set((await this.api.getClient(clientId)).documents);
     } catch (e) {
-      this.error.set(errorText(e));
+      this.error.set(inlineError(e));
     }
   }
 
@@ -314,12 +318,12 @@ export class StartPage {
       await this.loadClients(this.query());
       await this.select(client.id);
     } catch (e) {
-      this.error.set(errorText(e));
+      this.error.set(inlineError(e));
     }
   }
 
   protected stageState(document: ClientDocument, index: number): StageState {
-    const reached = DOCUMENT_STEPS.indexOf(document.status);
+    const reached = DOCUMENT_PIPELINE.indexOf(document.status);
     if (index <= reached) return 'done';
     return index === reached + 1 ? 'running' : 'open';
   }
@@ -361,7 +365,9 @@ export class StartPage {
         )
         .then(() => this.loadClients(this.query()))
         .catch((e) =>
-          this.error.set(this.translate.instant('start.uploadFailed', { detail: errorText(e) })),
+          this.error.set(
+            inlineError(e, (detail) => this.translate.instant('start.uploadFailed', { detail })),
+          ),
         );
     }
   }
@@ -371,7 +377,9 @@ export class StartPage {
       this.clients.set(await this.api.listClients(query));
       this.error.set(null);
     } catch (e) {
-      this.error.set(this.translate.instant('start.loadFailed', { detail: errorText(e) }));
+      this.error.set(
+        inlineError(e, (detail) => this.translate.instant('start.loadFailed', { detail })),
+      );
     }
   }
 }

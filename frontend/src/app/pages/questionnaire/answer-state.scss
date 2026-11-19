@@ -1,0 +1,34 @@
+.proposal-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  padding: 15px;
+  background: var(--grey-4);
+}
+
+.proposal-source {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--fg-2);
+}
+
+.answer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 15px;
+}
+
+:host(.compact) .proposal-box {
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+  background: transparent;
+
+  .proposal-source {
+    flex: none;
+  }
+}

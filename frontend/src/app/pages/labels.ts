@@ -1,17 +1,11 @@
 import { ClientSummary, DocumentStatus, RiskLevel, Suitability } from '../core/models';
+import { BackendUnavailableError } from '../core/treasury-api';
 import { BadgeTone } from '../shared/badge';
 
 /*
  * Codes map to badge tones here; their texts are translation keys of the same name,
  * e.g. `suitability.SUITABLE`, `risk.HIGH`, `documentStatus.INDEXED`.
  */
-export const DOCUMENT_STEPS: readonly DocumentStatus[] = [
-  'UPLOADED',
-  'TEXT_EXTRACTED',
-  'INDEXED',
-  'EXTRACTED',
-];
-
 export const DOCUMENT_TONE: Readonly<Record<DocumentStatus, BadgeTone>> = {
   UPLOADED: 'pending',
   TEXT_EXTRACTED: 'pending',
@@ -53,4 +47,15 @@ export function plural(key: string, count: number): string {
 
 export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Message for a failed request on a screen, worded by `describe` from the error's text. Null if no
+ * backend is reachable: the shell's banner already says so once, with the switch to demo data.
+ */
+export function inlineError(
+  error: unknown,
+  describe: (detail: string) => string = (detail) => detail,
+): string | null {
+  return error instanceof BackendUnavailableError ? null : describe(errorText(error));
 }

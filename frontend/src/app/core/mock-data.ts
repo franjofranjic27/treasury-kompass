@@ -1,12 +1,5 @@
 import { Localizable, Localized, l, law } from './i18n/localized';
-import {
-  AnswerOrigin,
-  AnswerStatus,
-  Assessment,
-  ChecklistItem,
-  ClientSegment,
-  RiskProfileCode,
-} from './models';
+import { AnswerOrigin, AnswerStatus, Assessment, ClientSegment, RiskProfileCode } from './models';
 
 /**
  * Demo data of the two fictional clients, copied from reference/prototype/treasury-kompass.html.
@@ -38,6 +31,7 @@ export interface ClientSeed {
     readonly fileName: string;
     readonly pageCount: number;
     readonly label: Localized;
+    readonly balanceSheetPage: number;
   };
   readonly answers: Readonly<Record<string, SeedAnswer>>;
   readonly assessment: Localizable<AssessmentSeed>;
@@ -115,6 +109,7 @@ export const MUSTER: ClientSeed = {
     fileName: 'Jahresrechnung_2025_Muster_Maschinenbau.pdf',
     pageCount: 24,
     label: l('Jahresrechnung 2025', 'Annual financial statements 2025'),
+    balanceSheetPage: 4,
   },
   answers: {
     'fin.revenue': doc('28.4', MUSTER_INCOME),
@@ -372,6 +367,7 @@ export const COMPONENTS: ClientSeed = {
     fileName: 'Geschaeftsbericht_2025_Beispiel_Components.pdf',
     pageCount: 86,
     label: l('Geschäftsbericht 2025', 'Annual report 2025'),
+    balanceSheetPage: 51,
   },
   answers: {
     'fin.revenue': doc('146.0', COMPONENTS_INCOME),

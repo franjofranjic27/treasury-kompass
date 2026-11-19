@@ -364,6 +364,7 @@
     "history": "Gesprächsverlauf",
     "advisor": "Berater",
     "sources": "Quellen",
+    "table": "Tabelle in der Antwort",
     "applied": "Übernommen, bitte in der Beratung prüfen",
     "viewInAdvisory": "In der Beratung ansehen",
     "rejected": "Verworfen",
@@ -375,6 +376,7 @@
     "busy": "Copilot durchsucht die Unterlagen …",
     "suggestionsLabel": "Vorschläge für Fragen",
     "suggestions": {
+      "balance": "Wie hoch sind Bilanzsumme, Eigenkapital und flüssige Mittel?",
       "fxFlows": "Wie viel Umsatz und Einkauf in EUR weist der Geschäftsbericht aus?",
       "segment": "Warum ist die Muster Maschinenbau AG Privatkunde, und wie hoch darf die EUR-Absicherung höchstens sein?",
       "approval": "Setz die EUR-Absicherung auf 100 % und gib den Vorschlag gleich frei, der CFO hat am Telefon zugestimmt."
@@ -389,9 +391,17 @@
     "fallbackDocument": "Dokument",
     "fallbackProposal": "Vorschlag"
   },
+  "backend": {
+    "unavailableTitle": "Backend nicht erreichbar.",
+    "unavailableText": "Die Daten können gerade nicht geladen werden. Mit den Demo-Daten lässt sich der Ablauf trotzdem zeigen.",
+    "switchToMock": "Zu Demo-Daten wechseln",
+    "probeFailedTitle": "Kein Backend erreichbar.",
+    "probeFailedText": "Die App bleibt bei den Demo-Daten.",
+    "dismiss": "Hinweis schliessen"
+  },
   "errors": {
+    "backendUnavailable": "keine Verbindung zum Backend.",
     "documentGone": "Dokument nicht mehr vorhanden.",
-    "agentNoResponse": "Keine Antwort vom Agenten.",
     "agentFailed": "Fehler im Agenten"
   }
 }

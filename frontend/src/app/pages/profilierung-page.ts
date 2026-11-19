@@ -13,6 +13,7 @@ import {
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { CurrentClient } from '../core/current-client';
+import { DataMode } from '../core/data-mode';
 import { MioPipe, PctPipe } from '../core/format';
 import { Assessment, Question, Questionnaire, QuestionnaireSection } from '../core/models';
 import { RefreshBus } from '../core/refresh-bus';
@@ -21,7 +22,7 @@ import { Badge } from '../shared/badge';
 import { CaseNav } from '../shared/case-nav';
 import { Icon } from '../shared/icon';
 import { FactorList } from '../shared/score';
-import { RISK_TONE, errorText, plural } from './labels';
+import { RISK_TONE, inlineError, plural } from './labels';
 import { KnowledgeMatrix, isKnowledgeMatrix } from './questionnaire/knowledge-matrix';
 import { QuestionField } from './questionnaire/question-field';
 
@@ -46,6 +47,7 @@ interface Progress {
     KnowledgeMatrix,
     QuestionField,
   ],
+  styleUrl: './profilierung-page.scss',
   template: `
     <app-case-nav [clientId]="id()" />
     <div class="page-title">
@@ -263,7 +265,7 @@ interface Progress {
           </div>
         </section>
       }
-    } @else if (!error()) {
+    } @else if (!error() && !dataMode.backendUnavailable()) {
       <p class="meta-lg" role="status">{{ 'questionnaire.loading' | translate }}</p>
     }
   `,
@@ -272,6 +274,7 @@ export class ProfilierungPage {
   readonly id = input.required<string>();
 
   protected readonly currentClient = inject(CurrentClient);
+  protected readonly dataMode = inject(DataMode);
   private readonly api = inject(TreasuryApi);
   private readonly refresh = inject(RefreshBus);
   private readonly translate = inject(TranslateService);
@@ -344,7 +347,7 @@ export class ProfilierungPage {
       await action();
       await this.load(this.id());
     } catch (e) {
-      this.error.set(errorText(e));
+      this.error.set(inlineError(e));
     }
   }
 
@@ -359,7 +362,9 @@ export class ProfilierungPage {
       this.assessment.set(assessment);
       this.error.set(null);
     } catch (e) {
-      this.error.set(this.translate.instant('questionnaire.loadFailed', { detail: errorText(e) }));
+      this.error.set(
+        inlineError(e, (detail) => this.translate.instant('questionnaire.loadFailed', { detail })),
+      );
     }
   }
 }

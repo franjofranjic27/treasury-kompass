@@ -1,6 +1,7 @@
 import { Component, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { DataMode } from '../core/data-mode';
 import { ChfPipe, MioPipe, NumPipe, PctPipe } from '../core/format';
 import { Assessment, ClientDetail, Exposure, FxFlow, KeyFigure } from '../core/models';
 import { RefreshBus } from '../core/refresh-bus';
@@ -9,7 +10,8 @@ import { Badge } from '../shared/badge';
 import { CaseNav } from '../shared/case-nav';
 import { Icon } from '../shared/icon';
 import { FactorList } from '../shared/score';
-import { DOCUMENT_TONE, RISK_TONE, SUITABILITY_TONE, errorText, plural } from './labels';
+import { ScrollRegion } from '../shared/scroll-region';
+import { DOCUMENT_TONE, RISK_TONE, SUITABILITY_TONE, inlineError, plural } from './labels';
 
 interface CurrencyBlock {
   readonly flow: FxFlow;
@@ -29,7 +31,9 @@ interface CurrencyBlock {
     CaseNav,
     Icon,
     FactorList,
+    ScrollRegion,
   ],
+  styleUrl: './dashboard-page.scss',
   template: `
     <app-case-nav [clientId]="id()" />
     @if (client(); as c) {
@@ -90,7 +94,7 @@ interface CurrencyBlock {
               <h3 id="figures-title">{{ 'dashboard.keyFigures' | translate }}</h3>
               <span class="meta">{{ 'dashboard.keyFiguresNote' | translate }}</span>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap" [appScrollRegion]="'dashboard.keyFigures' | translate">
               <table class="table">
                 <thead>
                   <tr>
@@ -178,39 +182,52 @@ interface CurrencyBlock {
           @if (assessment(); as a) {
             <section class="card" aria-labelledby="liq-title">
               <h3 id="liq-title">{{ 'dashboard.liquidityTitle' | translate }}</h3>
-              <div class="table-wrap">
+              <div class="table-wrap" [appScrollRegion]="'dashboard.liquidityTitle' | translate">
+                <!-- Two columns, the origin under the position: the table has to fit a half-width card. -->
                 <table class="table">
                   <thead>
                     <tr>
-                      <th scope="col">{{ 'dashboard.position' | translate }}</th>
+                      <th scope="col">
+                        {{ 'dashboard.position' | translate }}
+                        <span class="sr-only">, {{ 'dashboard.origin' | translate }}</span>
+                      </th>
                       <th scope="col" class="num">CHF</th>
-                      <th scope="col">{{ 'dashboard.origin' | translate }}</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td>{{ 'figure.fin.cash' | translate }}</td>
+                      <td>
+                        {{ 'figure.fin.cash' | translate }}
+                        <span class="meta block">{{
+                          figure('fin.cash')?.source ?? ('common.dash' | translate)
+                        }}</span>
+                      </td>
                       <td class="num strong">{{ figure('fin.cash')?.value | chf }}</td>
-                      <td class="src">
-                        {{ figure('fin.cash')?.source ?? ('common.dash' | translate) }}
-                      </td>
                     </tr>
                     <tr>
-                      <td>{{ 'dashboard.minimumLiquidity' | translate }}</td>
+                      <td>
+                        {{ 'dashboard.minimumLiquidity' | translate }}
+                        <span class="meta block">{{
+                          'dashboard.minimumLiquiditySource' | translate
+                        }}</span>
+                      </td>
                       <td class="num strong">{{ c.minimumLiquidity | chf }}</td>
-                      <td class="src">{{ 'dashboard.minimumLiquiditySource' | translate }}</td>
                     </tr>
                     <tr>
-                      <td>{{ 'dashboard.investable' | translate }}</td>
-                      <td class="num strong">{{ a.liquidity.excess | chf }}</td>
-                      <td class="src">{{ 'dashboard.investableRule' | translate }}</td>
-                    </tr>
-                    <tr>
-                      <td>{{ 'figure.fin.floatingRateDebt' | translate }}</td>
-                      <td class="num strong">{{ figure('fin.floatingRateDebt')?.value | chf }}</td>
-                      <td class="src">
-                        {{ figure('fin.floatingRateDebt')?.source ?? ('common.dash' | translate) }}
+                      <td>
+                        {{ 'dashboard.investable' | translate }}
+                        <span class="meta block">{{ 'dashboard.investableRule' | translate }}</span>
                       </td>
+                      <td class="num strong">{{ a.liquidity.excess | chf }}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        {{ 'figure.fin.floatingRateDebt' | translate }}
+                        <span class="meta block">{{
+                          figure('fin.floatingRateDebt')?.source ?? ('common.dash' | translate)
+                        }}</span>
+                      </td>
+                      <td class="num strong">{{ figure('fin.floatingRateDebt')?.value | chf }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -341,33 +358,37 @@ interface CurrencyBlock {
                 <h3 id="kn-title">{{ 'dashboard.knowledgeTitle' | translate }}</h3>
                 <span class="meta-lg">{{ 'dashboard.knowledgeBasis' | translate }}</span>
               </div>
-              <div class="table-wrap">
+              <div class="table-wrap" [appScrollRegion]="'dashboard.knowledgeTitle' | translate">
+                <!-- Two columns, the knowledge under the product: the table has to fit a half-width card. -->
                 <table class="table">
                   <thead>
                     <tr>
-                      <th scope="col">{{ 'questionnaire.productClass' | translate }}</th>
-                      <th scope="col">{{ 'dashboard.knowledge' | translate }}</th>
+                      <th scope="col">
+                        {{ 'questionnaire.productClass' | translate }}
+                        <span class="sr-only">, {{ 'dashboard.knowledge' | translate }}</span>
+                      </th>
                       <th scope="col">{{ 'common.suitability' | translate }}</th>
                     </tr>
                   </thead>
                   <tbody>
                     @for (s of a.suitability; track s.product) {
                       <tr>
-                        <th scope="row" class="row-head">
+                        <th scope="row">
                           {{ 'product.' + s.product | translate }}
+                          <span class="meta block">
+                            {{ 'dashboard.knowledge' | translate }}:
+                            {{
+                              s.knowledgePresumed
+                                ? ('knowledge.presumed' | translate)
+                                : s.knowledge
+                                  ? ('knowledge.' + s.knowledge | translate)
+                                  : ('common.dash' | translate)
+                            }}
+                          </span>
                           @if (s.kidRequired) {
                             <span class="meta block">{{ 'common.kidRequired' | translate }}</span>
                           }
                         </th>
-                        <td>
-                          {{
-                            s.knowledgePresumed
-                              ? ('knowledge.presumed' | translate)
-                              : s.knowledge
-                                ? ('knowledge.' + s.knowledge | translate)
-                                : ('common.dash' | translate)
-                          }}
-                        </td>
                         <td>
                           <span class="cell-stack">
                             <app-badge [tone]="suitabilityTone[s.suitability]">{{
@@ -384,7 +405,7 @@ interface CurrencyBlock {
                 </table>
               </div>
             </section>
-          } @else {
+          } @else if (!dataMode.backendUnavailable()) {
             <section class="card">
               <p class="meta-lg" [attr.role]="assessmentError() ? null : 'status'">
                 {{ assessmentError() ?? ('common.loading' | translate) }}
@@ -393,7 +414,7 @@ interface CurrencyBlock {
           }
         </div>
       </div>
-    } @else {
+    } @else if (!dataMode.backendUnavailable()) {
       <p [class.error]="error()" [attr.role]="error() ? 'alert' : 'status'">
         {{ error() ?? ('dashboard.loading' | translate) }}
       </p>
@@ -407,6 +428,7 @@ export class DashboardPage {
   private readonly refresh = inject(RefreshBus);
   private readonly translate = inject(TranslateService);
 
+  protected readonly dataMode = inject(DataMode);
   protected readonly documentTone = DOCUMENT_TONE;
   protected readonly riskTone = RISK_TONE;
   protected readonly suitabilityTone = SUITABILITY_TONE;
@@ -444,7 +466,9 @@ export class DashboardPage {
       this.client.set(await this.api.getClient(id));
       this.error.set(null);
     } catch (e) {
-      this.error.set(this.translate.instant('dashboard.loadFailed', { detail: errorText(e) }));
+      this.error.set(
+        inlineError(e, (detail) => this.translate.instant('dashboard.loadFailed', { detail })),
+      );
       return;
     }
     try {
@@ -452,7 +476,7 @@ export class DashboardPage {
       this.assessmentError.set(null);
     } catch (e) {
       this.assessment.set(null);
-      this.assessmentError.set(errorText(e));
+      this.assessmentError.set(inlineError(e));
     }
   }
 }

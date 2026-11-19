@@ -8,7 +8,8 @@ const MAX_SCORE = 5;
 @Component({
   selector: 'app-score-dots',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'score-dots', role: 'img', '[attr.aria-label]': 'label()' },
+  host: { role: 'img', '[attr.aria-label]': 'label()' },
+  styleUrl: './score-dots.scss',
   template: `
     @for (filled of dots(); track $index) {
       <span class="dot" [class.filled]="filled"></span>
@@ -32,6 +33,7 @@ export class ScoreDots {
   selector: 'app-factor-list',
   imports: [ScoreDots],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrl: './factor-list.scss',
   template: `
     <ul class="factor-list">
       @for (f of factors(); track f.label) {

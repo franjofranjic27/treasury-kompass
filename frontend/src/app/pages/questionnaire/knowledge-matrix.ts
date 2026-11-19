@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { ChoiceOption, Question } from '../../core/models';
+import { ScrollRegion } from '../../shared/scroll-region';
 import { AnswerState } from './answer-state';
 
 export interface MatrixAnswer {
@@ -11,10 +12,11 @@ export interface MatrixAnswer {
 /** Knowledge per product class as one radio matrix (rows: products, columns: knowledge levels). */
 @Component({
   selector: 'app-knowledge-matrix',
-  imports: [TranslatePipe, AnswerState],
+  imports: [TranslatePipe, AnswerState, ScrollRegion],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrl: './knowledge-matrix.scss',
   template: `
-    <div class="table-wrap">
+    <div class="table-wrap" [appScrollRegion]="'questionnaire.knowledgeCaption' | translate">
       <table class="table matrix">
         <caption class="sr-only">
           {{
@@ -33,7 +35,7 @@ export interface MatrixAnswer {
         <tbody>
           @for (q of questions(); track q.key) {
             <tr [class.row-proposed]="q.status === 'PROPOSED'">
-              <th scope="row" class="row-head">{{ q.text }}</th>
+              <th scope="row">{{ q.text }}</th>
               @for (level of levels(); track level.value) {
                 <td class="center">
                   <label class="radio-cell">

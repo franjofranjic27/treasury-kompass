@@ -39,6 +39,7 @@ export abstract class TreasuryApi {
   ): Promise<void>;
 }
 
+/** A request the backend answered with an error; the message is already worded for the advisor. */
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -46,5 +47,16 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+
+/**
+ * Nothing that looks like our backend answered: network failure, gateway error, or an HTML page
+ * (e.g. a static host's SPA fallback or 404 page) where JSON was expected. The message is localized.
+ */
+export class BackendUnavailableError extends ApiError {
+  constructor(message: string, status = 0) {
+    super(message, status);
+    this.name = 'BackendUnavailableError';
   }
 }

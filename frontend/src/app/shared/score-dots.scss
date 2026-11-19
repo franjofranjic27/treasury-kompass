@@ -1,0 +1,16 @@
+:host {
+  flex: none;
+  display: inline-flex;
+  gap: 3px;
+}
+
+.dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--line-card);
+}
+
+.dot.filled {
+  background: var(--fg-1);
+}

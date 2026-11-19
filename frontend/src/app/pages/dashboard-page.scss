@@ -1,0 +1,126 @@
+// Client info left, risk profile right from a main area of about 760 px; stacked below that.
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(335px, 100%), 1fr));
+  gap: 30px;
+  align-items: start;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  min-width: 0;
+}
+
+.facts-stacked {
+  gap: 20px 30px;
+
+  > div {
+    gap: 5px;
+  }
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+}
+
+.doc-status-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  line-height: 22px;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px 15px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-card);
+  }
+}
+
+.file-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.currency-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--grey-2);
+}
+
+.currency-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.currency-code {
+  font-size: 21px;
+  line-height: 26px;
+  font-weight: 700;
+}
+
+.score-block {
+  display: flex;
+  flex-direction: column;
+
+  app-factor-list {
+    margin-top: 5px;
+  }
+}
+
+.score-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.score-value {
+  font-size: 21px;
+  line-height: 26px;
+}
+
+// The tables share a half-width card: tighter cells, and badges and sources may wrap.
+.table {
+  th,
+  td {
+    padding-right: 10px;
+    padding-left: 10px;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+
+  th:first-child,
+  td:first-child {
+    padding-left: 0;
+  }
+
+  th:last-child,
+  td:last-child {
+    padding-right: 0;
+  }
+
+  .src {
+    font-size: 15px;
+    line-height: 20px;
+  }
+
+  app-badge {
+    white-space: normal;
+  }
+}

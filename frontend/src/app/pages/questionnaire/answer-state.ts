@@ -9,6 +9,7 @@ import { Badge } from '../../shared/badge';
   imports: [TranslatePipe, Badge],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[class.compact]': 'compact()' },
+  styleUrl: './answer-state.scss',
   template: `
     @let q = question();
     @switch (q.status) {
